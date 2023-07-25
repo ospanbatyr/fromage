@@ -12,7 +12,7 @@ class Experiment(pl.LightningModule):
         self.automatic_optimization = False
 
         self.config = config
-        self.model = Fromage(device, config.get('model', dict()))
+        self.model = Fromage(device, config)
         self.modes = ('caption', 'retrieval')
         self.save_hyperparameters(config)
     
@@ -39,6 +39,7 @@ class Experiment(pl.LightningModule):
     def training_step(self, batch, batch_index):
         pixels, text = batch
         opt = self.optimizers()
+        opt_config = self.config['optimizer']
 
         losses = {f"{mode}_loss":0 for mode in self.modes}
         for mode in self.modes:
@@ -50,20 +51,19 @@ class Experiment(pl.LightningModule):
 
             opt.zero_grad()
             self.manual_backward(loss)
-            losses[f"{mode}_loss"] = loss.item()
-            
-            opt_config = self.config.get('optimizer', dict())
-            self.clip_gradients(opt, gradient_clip_val=opt_config.get('gradient_clip_val', 1.0), gradient_clip_algorithm="norm")
+            self.clip_gradients(opt, gradient_clip_val=opt_config['gradient_clip_val'], gradient_clip_algorithm="norm")
             opt.step()
+
+            losses[f"{mode}_loss"] = loss.item()
 
         self.log_dict(losses, prog_bar=True)
         return losses
 
 
     def configure_optimizers(self):
-        opt_config = self.config.get('optimizer', dict())
-        opt_name = opt_config.get('algorithm', 'AdamW')
-        opt_params = opt_config.get('params', dict())
+        opt_config = self.config['optimizer']
+        opt_name = opt_config['algorithm']
+        opt_params = opt_config['params']
         if opt_name == "AdamW":
             optimizer = optim.AdamW(self.parameters(), **opt_params)
         elif opt_name == "Adam":

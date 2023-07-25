@@ -1,37 +1,42 @@
 model:
   vision_model: "biovil"
   language_model: "facebook/opt-350m"
-  tie_mappers: false
+  tie_mappers: true
+  image_dropout: 0.1
+  shared_emb_dim: 512
+  max_length: 112
 
 trainer:
   accelerator: "gpu"
   devices: 1
-  max_epochs: 2
-  precision: 32
+  max_epochs: 10
 
 # data loader
 loader:
-  batch_size: 40
+  batch_size: 48
   pin_memory: true
   num_workers: 4
 
 # logger (tensorboard)
 logger:
-  name: "test_2"
+  name: "untied_test_1"
   project: "fromage"
-  version: "test_2"
+  version: "untied_test_1"
   save_dir: "logs/"
 
 dataset:
   name: "MIMIC-CXR-JPG"
-  path: "/kuacc/users/oince22/hpc_run/physionet.org/files/mimic-cxr-jpg/"
+  resize: 512
+  center_crop_size: 480
+  tsv_path: "data/MIMIC_JPG.tsv"
+  img_path: "/kuacc/users/oince22/hpc_run/physionet.org/files/mimic-cxr-jpg/2.0.0/files/"
 
 optimizer:
   algorithm: 'AdamW'
   gradient_clip_val: 1.0
   params:
-    lr: 0.00005
-    weight_decay: 0.0001
+    lr: 1.0e-4
+    weight_decay: 1.0e-2
 
 # checkpoint
 checkpoint:

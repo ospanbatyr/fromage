@@ -1,6 +1,0 @@
-algorithm: 'AdamW'
-params:
-  lr: 0.0003
-  betas: [0.9, 0.95]
-  eps: 1.0e-6
-  weight_decay: 1.0e-3

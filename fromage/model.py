@@ -59,7 +59,7 @@ class FromageModel(nn.Module):
 
     def _init_language_model(self) -> None:
         # create language model
-        model_checkpoint = self.config.get('language_model', 'facebook/opt-125m')
+        model_checkpoint = self.config['language_model']
         self.lm = AutoModelForCausalLM.from_pretrained(model_checkpoint)
 
         # freeze the language model
@@ -68,7 +68,7 @@ class FromageModel(nn.Module):
 
         self.lm.eval()
 
-        # resize token embeddings (as we added [RET] token) and
+        # resize token embeddings (as we added [RET] token) and 
         # get input embeddings as we will process information on embedding level, not index level 
         self.lm.resize_token_embeddings(len(self.tokenizer))
         self.input_embeddings = self.lm.get_input_embeddings()
@@ -78,7 +78,7 @@ class FromageModel(nn.Module):
 
     def _init_image_encoder(self) -> None:
         # create image encoder
-        vm_name = self.config.get('vision_model', 'biovil')
+        vm_name = self.config['vision_model']
         
         self.vm = get_vision_model(vm_name)
         self.vm_embed_dim = get_vm_embed_dim(vm_name)
@@ -92,30 +92,30 @@ class FromageModel(nn.Module):
 
     def _init_mappers(self) -> None:
         self.caption_mapping = nn.Linear(self.vm_embed_dim, self.lm_embed_dim)
-        self.image_dropout = nn.Dropout(self.config.get('image_dropout', 0.1))
+        self.image_dropout = nn.Dropout(self.config['image_dropout'])
 
-        if self.config.get('tie_mappers', False):
+        if self.config['tie_mappers']:
             self.ret_i2t_mapping = self.caption_mapping
             self.ret_t2i_mapping = nn.Linear(self.lm_embed_dim, self.lm_embed_dim)
         else:
-            self.shared_emb_dim = self.config.get('shared_emb_dim', 512)
+            self.shared_emb_dim = self.config['shared_emb_dim']
             self.ret_i2t_mapping = nn.Linear(self.vm_embed_dim, self.shared_emb_dim)
             self.ret_t2i_mapping = nn.Linear(self.lm_embed_dim, self.shared_emb_dim)
 
     
     def encode_images(self, pixel_values, mode):
         assert mode in self.modes, f'Mode must be in {str(self.modes)}, got {mode} instead'
+        pixel_values = pixel_values.to(self.device)
 
         with torch.no_grad():
-            pixel_values = pixel_values.to(self.device)
             img_embs = self.vm(pixel_values)
 
-            if mode == "caption":
-                img_embs = self.caption_mapping(img_embs)
-                img_embs = self.image_dropout(img_embs)
-            elif mode == "retrieval":
-                img_embs = self.ret_i2t_mapping(img_embs)
-                img_embs = self.image_dropout(img_embs)
+        if mode == "caption":
+            img_embs = self.caption_mapping(img_embs)
+            img_embs = self.image_dropout(img_embs)
+        elif mode == "retrieval":
+            img_embs = self.ret_i2t_mapping(img_embs)
+            img_embs = self.image_dropout(img_embs)
 
         return img_embs
 
@@ -131,7 +131,7 @@ class FromageModel(nn.Module):
                 new_text_inputs.append(f'{text_inputs[i]}[RET]')
             text_inputs = tuple(new_text_inputs)
 
-        max_length = self.config.get('max_length', 112)
+        max_length = self.config['max_length']
         text_inputs = self.tokenizer(
             text_inputs, return_tensors="pt", 
             padding="max_length", truncation=True, 
@@ -261,18 +261,28 @@ class Fromage(nn.Module):
         self.config = config
         self._init_tokenizer()
         self._init_inference_img_transform()
-        self.model = FromageModel(device=self.device, tokenizer=self.tokenizer, ret_token_idx=self.ret_token_idx, config=self.config)
+        self.model = FromageModel(device=self.device, tokenizer=self.tokenizer, ret_token_idx=self.ret_token_idx, config=self.model_config)
     
 
+    @property
+    def dataset_config(self):
+        return self.config['dataset']
+
+    
+    @property
+    def model_config(self):
+        return self.config['model']
+
+    
     def _init_inference_img_transform(self) -> None:
-        resize = self.config.get('resize', RESIZE)
-        center_crop_size = self.config.get('center_crop_size', CENTER_CROP_SIZE)
+        resize = self.dataset_config['resize']
+        center_crop_size = self.dataset_config['center_crop_size']
         self.img_transform = image_transform(resize=resize, center_crop_size=center_crop_size, train=False) 
 
 
     def _init_tokenizer(self) -> None:
         # create tokenizer
-        model_checkpoint = self.config.get('language_model', 'facebook/opt-125m')
+        model_checkpoint = self.model_config['language_model']
         tokenizer = AutoTokenizer.from_pretrained(model_checkpoint, device=self.device)
         
         # add [RET] and <|image|> tokens and ensure that "[RET]" tokenization length is 1 

@@ -16,4 +16,6 @@ module load cuda/11.7.1
 module load cudnn/8.2.0/cuda-11.X
 
 export TOKENIZERS_PARALLELISM=true
-python -u train.py
+python train.py --config-name "train-tied.yaml"
+
+# sbatch fromage_train.sh

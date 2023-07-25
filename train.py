@@ -9,7 +9,7 @@ from omegaconf import OmegaConf
 
 from fromage.data import MIMICDataModule as DataModule
 from fromage.experiment import Experiment
-from fromage.utils import create_callbacks, create_logger, process_config
+from fromage.utils import create_callbacks, create_logger
 
 
 CONFIG_DIR = osp.abspath(osp.join(__file__, "..", "config"))
@@ -18,7 +18,7 @@ CONFIG_DIR = osp.abspath(osp.join(__file__, "..", "config"))
 def main(config):
     config = OmegaConf.to_container(config)
     config = pl.utilities.parsing.AttributeDict(config)
-    config = process_config(config)
+
     if "seed" in config:
         pl.seed_everything(config["seed"])
     print(config)
@@ -27,9 +27,9 @@ def main(config):
     logger = create_logger(config)
     callbacks = None
 
-    logger_conf = config.get("logger", dict())
-    if logger is not None and logger_conf.get("version", "") != "debug":
-        callbacks, ckpt_path = create_callbacks(config, logger_conf.get("save_dir", "logs/"))
+    logger_conf = config["logger"]
+    if logger is not None and logger_conf["version"] != "debug":
+        callbacks, ckpt_path = create_callbacks(config, logger_conf["save_dir"])
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     experiment = Experiment(device, config)

@@ -16,12 +16,10 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 
 class RETTokenCallback(pl.Callback):
-    def on_before_optimizer_step(self, trainer, pl_module, optimizer):
+    def on_after_backward(self, trainer, pl_module):
         ret_token_idx = pl_module.model.ret_token_idx
-        print("asd")
 
         for param in pl_module.model.model.input_embeddings.parameters():
-            print("bcd")
             mask = torch.arange(param.grad.shape[0]) != ret_token_idx
             param.grad[mask,:] = 0.0
 
@@ -42,7 +40,7 @@ def create_callbacks(config, log_dir):
     if ckpt_path is not None and not osp.isfile(ckpt_path):
         raise Exception('ckpt does not exist at {}'.format(ckpt_path))
 
-    return [checkpoint_callback, RETTokenCallback()], ckpt_path
+    return [RETTokenCallback(), checkpoint_callback], ckpt_path
 
 
 def create_logger(config):
@@ -56,13 +54,6 @@ def create_logger(config):
         config['logger']['project'] = f'{architecture}'
     logger = pl.loggers.WandbLogger(**config['logger'])
     return logger
-
-
-def process_config(config):
-    model_config = config.get('model', {})
-    dataset_config = config.get('dataset', {})
-    config['dataset'] = dataset_config
-    return config
 
 
 def contrastive_loss(logits):

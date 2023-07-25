@@ -49,8 +49,9 @@ def image_transform(resize: int, center_crop_size: int, train: bool) -> Compose:
 
 
 class MIMICDataset(Dataset):    
-    def __init__(self, dataset_path: str, transform: torchvision.transforms):
+    def __init__(self, dataset_path: str, img_path: str, transform: torchvision.transforms):
         self.dataset_path = dataset_path
+        self.img_path = img_path
         self.img_paths, self.reports = self._read_tsv_file()
         self.transform = transform
 
@@ -61,7 +62,7 @@ class MIMICDataset(Dataset):
             reader = csv.reader(f, delimiter='\t')
             for report, img_path in reader:
                 reports.append(report)
-                img_paths.append(Path(osp.join(IMG_ROOT, img_path)))
+                img_paths.append(Path(osp.join(self.img_path, img_path)))
                 
         return img_paths, reports
         
@@ -95,25 +96,27 @@ class MIMICDataModule(LightningDataModule):
             'batch_size': 64
         }
 
-        return self.config.get('loader', default_config)
+        return self.config['loader']
 
     @property
     def dataset_config(self):
-        return self.config.get('dataset', dict())
+        return self.config['dataset']
 
     @property
     def model_config(self):
-        return self.config.get('model', dict())
+        return self.config['model']
 
     def _init_img_transform(self) -> None:
-        resize = self.config.get('resize', RESIZE)
-        center_crop_size = self.config.get('center_crop_size', CENTER_CROP_SIZE)
+        resize = self.dataset_config['resize']
+        center_crop_size = self.dataset_config['center_crop_size']
         self.img_transform = image_transform(resize=resize, center_crop_size=center_crop_size, train=True)
 
     def _init_datasets(self) -> None:
-        dataset_path = self.config.get('dataset_path', 'data/MIMIC_JPG.tsv')
+        dataset_path = self.dataset_config['tsv_path']
+        img_path = self.dataset_config['img_path']
         self.train_data = MIMICDataset(
             dataset_path=dataset_path,
+            img_path=img_path,
             transform=self.img_transform
         )
 

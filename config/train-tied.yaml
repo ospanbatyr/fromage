@@ -1,0 +1,59 @@
+model:
+  vision_model: "biovil"
+  language_model: "facebook/opt-350m"
+  tie_mappers: true
+  image_dropout: 0.1
+  shared_emb_dim: 512
+  max_length: 112
+
+trainer:
+  accelerator: "gpu"
+  devices: 1
+  max_epochs: 10
+
+# data loader
+loader:
+  batch_size: 48
+  pin_memory: true
+  num_workers: 4
+
+# logger (tensorboard)
+logger:
+  name: "tied_test_1"
+  project: "fromage"
+  version: "tied_test_1"
+  save_dir: "logs/"
+
+dataset:
+  name: "MIMIC-CXR-JPG"
+  resize: 512
+  center_crop_size: 480
+  tsv_path: "data/MIMIC_JPG.tsv"
+  img_path: "/kuacc/users/oince22/hpc_run/physionet.org/files/mimic-cxr-jpg/2.0.0/files/"
+
+optimizer:
+  algorithm: 'AdamW'
+  gradient_clip_val: 1.0
+  params:
+    lr: 1.0e-4
+    weight_decay: 1.0e-2
+
+# checkpoint
+checkpoint:
+  save_top_k: 1
+  save_last: true
+  verbose: true
+  monitor: "caption_loss"
+  mode: "min"
+
+ckpt_path: 
+  ckpt_path: null
+
+# hydra-specific
+hydra:
+  run:
+    dir: .
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled
