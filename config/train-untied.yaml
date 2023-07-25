@@ -19,9 +19,9 @@ loader:
 
 # logger (tensorboard)
 logger:
-  name: "untied_test_1"
+  name: "untied_test_2"
   project: "fromage"
-  version: "untied_test_1"
+  version: "untied_test_2"
   save_dir: "logs/"
 
 dataset:
