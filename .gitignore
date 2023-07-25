@@ -1,0 +1,9 @@
+
+logs/
+lightning_logs/
+*.log
+data/*
+bin/*
+.hydra/
+fromage/__pycache__/
+.ipynb_checkpoints/
