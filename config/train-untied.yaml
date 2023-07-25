@@ -13,7 +13,7 @@ trainer:
 
 # data loader
 loader:
-  batch_size: 48
+  batch_size: 40
   pin_memory: true
   num_workers: 4
 
@@ -35,8 +35,8 @@ optimizer:
   algorithm: 'AdamW'
   gradient_clip_val: 1.0
   params:
-    lr: 1.0e-4
-    weight_decay: 1.0e-2
+    lr: 5.0e-5
+    weight_decay: 5.0e-5
 
 # checkpoint
 checkpoint:
