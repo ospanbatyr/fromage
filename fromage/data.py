@@ -24,7 +24,7 @@ IMG_ROOT = '/kuacc/users/oince22/hpc_run/physionet.org/files/mimic-cxr-jpg/2.0.0
 RESIZE = 512
 CENTER_CROP_SIZE = 480
 
-def image_transform(resize: int, center_crop_size: int, train: bool) -> Compose:
+def cxr_image_transform(resize: int, center_crop_size: int, train: bool) -> Compose:
     data_aug_rot = 15
     data_aug_trans = 0.10
     data_aug_scale = 0.10
@@ -46,6 +46,25 @@ def image_transform(resize: int, center_crop_size: int, train: bool) -> Compose:
         ]
 
     return Compose(transforms)
+
+
+def coco_image_transform(train: bool):
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    if train:
+        img_transform = transforms.Compose([
+            transforms.RandomSizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize,
+        ])
+    else:
+        img_transform = transforms.Compose([
+            transforms.Scale(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            normalize,
+        ])
+    return img_transform
 
 
 class MIMICDataset(Dataset):    
@@ -81,7 +100,61 @@ class MIMICDataset(Dataset):
                 idx = np.random.randint(0, len(self.img_paths))
 
 
-class MIMICDataModule(LightningDataModule):
+class COCODataset(Dataset):
+    def __init__(self, path, split, year, image_transform):
+        super().__init__()
+        assert split in ('train', 'val')
+        assert val in (2014, 2017)
+
+        self.year = year
+        self.split = split
+        self.image_transform = image_transform
+        self.path = osp.abspath(osp.expanduser(path))
+        
+        self.setup_dataset()
+
+    def setup_dataset(self):
+        self.split_name = f'{self.split}{self.year}'
+        self.image_dir = osp.jpin(self.path, self.split_name)
+        self.annotation_file = osp.join(self.path, 'annotations', f'captions_{self.split_name}.json')
+
+        with open(self.annotation_file, "r") as f:
+            json_data = json.load(f)
+            annotations = json_data['annotations']
+
+        image_dict = dict()
+        for item in json_data['images']:
+            image_dict[item['id']] = item
+
+        self.annotations = annotations
+        self.image_dict = image_dict
+
+    def __len__(self):
+        return self.annotations
+
+    def _read_image(self, idx):
+        image_id = self.annotations[idx]['image_id']
+        file_name = self.image_dict[image_id]['file_name']
+        file_path = osp.join(self.image_dir, file_name)
+        raw = Image.open(file_path)
+        raw = raw.convert("RGB") if raw.mode != "RGB" else raw
+        
+        image = self.image_transform(raw)
+        return image
+
+    def __getitem__(self, idx):
+        while True:
+            try:
+                image = self._read_image(idx)
+                caption = self.annotations[idx]['caption']
+            except Exception as e:
+                print(str(e))
+                idx = np.random.randint(0, len(self))
+
+        return image, caption
+
+
+class BaseDataModule(LightningDataModule):
     def __init__(self, config=dict()):
         super().__init__()
         self.config = config
@@ -90,12 +163,6 @@ class MIMICDataModule(LightningDataModule):
     
     @property
     def loader_config(self):
-        default_config = {
-            'num_workers': 2,
-            'pin_memory': False,
-            'batch_size': 64
-        }
-
         return self.config['loader']
 
     @property
@@ -106,10 +173,53 @@ class MIMICDataModule(LightningDataModule):
     def model_config(self):
         return self.config['model']
 
+    def _init_img_transform(self):
+        raise NotImplementedError("Implement '_init_img_transform'")
+
+    def _init_datasets(self):
+        raise NotImplementedError("Implement '_init_datasets'")
+
+
+class CaptionDataModule(BaseDataModule):
+    def __init__(self, config=dict()):
+        super(CaptionDataModule, self).__init__(config)
+
+    def _init_img_transform(self) -> None:
+        self.train_img_transform = coco_image_transform(train=True)
+        self.val_img_transform = coco_image_transform(train=False)
+
+    def _init_datasets(self) -> None:
+        dataset_path = self.dataset_config['path']
+        year = self.dataset_config['year']
+        self.train_data = COCODataset(dataset_path, "train", year, self.train_img_transform)
+        self.val_data = COCODataset(dataset_path, "val", year, self.val_img_transform)
+
+    def train_dataloader(self):
+        return DataLoader(
+            self.train_data,
+            shuffle=True,
+            **self.loader_config
+        )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.val_data,
+            shuffle=False,
+            **self.loader_config
+        )
+
+    def predict_dataloader(self):
+        return self.val_dataloader()
+
+
+class MIMICDataModule(BaseDataModule):
+    def __init__(self, config=dict()):
+        super(MIMICDataModule, self).__init__(config)
+    
     def _init_img_transform(self) -> None:
         resize = self.dataset_config['resize']
         center_crop_size = self.dataset_config['center_crop_size']
-        self.img_transform = image_transform(resize=resize, center_crop_size=center_crop_size, train=True)
+        self.img_transform = cxr_image_transform(resize=resize, center_crop_size=center_crop_size, train=True)
 
     def _init_datasets(self) -> None:
         dataset_path = self.dataset_config['tsv_path']
