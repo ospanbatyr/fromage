@@ -52,14 +52,15 @@ def coco_image_transform(train: bool):
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     if train:
         img_transform = transforms.Compose([
-            transforms.RandomSizedCrop(224),
+            transforms.Resize(232, interpolation=InterpolationMode.BILINEAR),
+            transforms.RandomCrop(224),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             normalize,
         ])
     else:
         img_transform = transforms.Compose([
-            transforms.Scale(256),
+            transforms.Resize(232, interpolation=InterpolationMode.BILINEAR),
             transforms.CenterCrop(224),
             transforms.ToTensor(),
             normalize,

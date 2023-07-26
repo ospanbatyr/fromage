@@ -1,4 +1,4 @@
-#!/bin/bash
+#/bin/bash
 
 #SBATCH --job-name=fromage
 #SBATCH --nodes=1        
@@ -16,6 +16,6 @@ module load cuda/11.7.1
 module load cudnn/8.2.0/cuda-11.X
 
 export TOKENIZERS_PARALLELISM=true
-python train.py --config-name "train-tied.yaml"
+python train.py --config-name "train-coco.yaml"
 
 # sbatch fromage_train.sh

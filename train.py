@@ -7,7 +7,7 @@ import torch
 import hydra
 from omegaconf import OmegaConf
 
-from fromage.data import MIMICDataModule as DataModule
+from fromage.data import MIMICDataModule, CaptionDataModule
 from fromage.experiment import Experiment
 from fromage.utils import create_callbacks, create_logger
 
@@ -23,7 +23,12 @@ def main(config):
         pl.seed_everything(config["seed"])
     print(config)
 
-    dm = DataModule(config)
+    dataset_name = config["dataset"]["name"]
+    if dataset_name == "COCO":
+        dm = CaptionDataModule(config)
+    elif dataset_name == "MIMIC-CXR-JPG":
+        dm = MIMICDataModule(config)
+
     logger = create_logger(config)
     callbacks = None
 

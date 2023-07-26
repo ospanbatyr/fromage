@@ -69,7 +69,7 @@ class Experiment(pl.LightningModule):
         elif opt_name == "Adam":
             optimizer = optim.Adam(self.parameters(), **opt_params)
         else:
-            assert False, f"Optimizer '{opt_name}' is not configured"
+            raise NotImplementedError(f"Optimizer '{opt_name}' is not configured")
 
         return optimizer
 

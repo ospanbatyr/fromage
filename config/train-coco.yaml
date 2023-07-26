@@ -1,0 +1,60 @@
+model:
+  vision_model: "resnet-50-imagenet"
+  language_model: "facebook/opt-1.3b"
+  tie_mappers: true
+  image_dropout: 0.1
+  shared_emb_dim: 512
+  max_length: 32
+
+trainer:
+  accelerator: "gpu"
+  devices: 1
+  max_epochs: 10
+  accumulate_grad_batches: 4
+  val_check_interval: 0.1
+  precision: 16
+
+# data loader
+loader:
+  batch_size: 64
+  pin_memory: true
+  num_workers: 4
+
+# logger (tensorboard)
+logger:
+  name: "coco-fp16"
+  project: "fromage"
+  version: "coco-fp16"
+  save_dir: "logs/"
+
+dataset:
+  name: "COCO"
+  path: "/datasets/COCO"
+  year: 2017
+
+optimizer:
+  algorithm: 'AdamW'
+  gradient_clip_val: 1.0
+  params:
+    lr: 1.0e-4
+    weight_decay: 5.0e-5
+
+# checkpoint
+checkpoint:
+  save_top_k: 1
+  save_last: true
+  verbose: true
+  monitor: "caption_loss"
+  mode: "min"
+
+ckpt_path: 
+  ckpt_path: null
+
+# hydra-specific
+hydra:
+  run:
+    dir: .
+
+defaults:
+  - _self_
+  - override hydra/job_logging: disabled

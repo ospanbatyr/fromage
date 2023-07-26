@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from typing import Callable, Optional, Tuple, List, Dict
 import numpy as np
-from torchvision.models import resnet50
+from torchvision.models import resnet50, ResNet50_Weights
 from transformers import OPTForCausalLM, AutoTokenizer, AutoModelForCausalLM
 from torchvision.models.feature_extraction import get_graph_node_names
 from torchvision.models.feature_extraction import create_feature_extractor
@@ -11,7 +11,25 @@ from .data import image_transform, RESIZE, CENTER_CROP_SIZE
 
 VM_EMBED_DIMS = {
     'biovil': 2048,
+    'resnet-50-imagenet': 2048
 }
+
+
+class ResNet50(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.model = resnet50(weights=ResNet50_Weights.IMAGENET1K_V2)
+        self.feature_extractor = self._get_feature_extractor()
+    
+    def _get_feature_extractor(self):
+        self._return_nodes = {'avgpool': 'avgpool'}
+        return create_feature_extractor(self.model, return_nodes=self._return_nodes)
+
+    def forward(self, x):
+        features = self.feature_extractor(x)["avgpool"]
+        features = features.squeeze()
+        return features    
+
 
 class BioViL(nn.Module):
     def __init__(self):
@@ -37,6 +55,10 @@ class BioViL(nn.Module):
 def get_vision_model(vm_name):
     if vm_name == "biovil":
         return BioViL()
+    elif vm_name == "resnet-50-imagenet":
+        return ResNet50()
+    
+    raise NotImplementedError(f"{vm_name} is not configured")
 
 
 def get_vm_embed_dim(vm_name):
