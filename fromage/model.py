@@ -168,7 +168,7 @@ class FromageModel(nn.Module):
                 if text_inputs.input_ids[idx][text_lens[idx]-1] != self.ret_token_idx:
                     text_inputs.input_ids[idx][text_lens[idx]-1] = self.ret_token_idx
 
-        t2i_embs, i2t_embs = None, None
+        t2i_embs, i2t_embs, last_logits = None, None, None
 
         if mode == "caption":
             img_embs = self.encode_images(pixel_values, mode=mode)
@@ -195,22 +195,24 @@ class FromageModel(nn.Module):
         elif mode == "retrieval":
             i2t_embs = self.encode_images(pixel_values, mode=mode)
 
-            labels = text_inputs.input_ids
-            text_embs = self.input_embeddings(labels)
+            full_labels = text_inputs.input_ids
+            text_embs = self.input_embeddings(full_labels)
             input_embs = text_embs
 
-            output = self.lm(inputs_embeds=input_embs, attention_mask=text_inputs.attention_mask, labels=labels, output_hidden_states=True)
+            output = self.lm(inputs_embeds=input_embs, attention_mask=text_inputs.attention_mask, labels=full_labels, output_hidden_states=True)
 
             last_hidden_state = output.hidden_states[-1]
             ret_embs = last_hidden_state[torch.arange(last_hidden_state.shape[0]), text_lens-1, :]
             t2i_embs = self.ret_t2i_mapping(ret_embs)
+
+            last_logits = output.logits[torch.arange(last_hidden_state.shape[0]), text_lens-2, :]
 
             i2t_embs = i2t_embs / i2t_embs.norm(dim=1, keepdim=True)
             t2i_embs = t2i_embs / t2i_embs.norm(dim=1, keepdim=True)
 
             i2t_embs = self.logit_scale.exp() * i2t_embs
 
-        return output, t2i_embs, i2t_embs
+        return output, t2i_embs, i2t_embs, full_labels, last_logits
 
 
         def generate(self, embeddings, max_len, temperature=0.0, top_p=1.0, filter_value=float("-inf")):

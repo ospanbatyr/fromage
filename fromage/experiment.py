@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch import optim
 import pytorch_lightning as pl
 from .model import Fromage
-from .utils import contrastive_loss
+from .utils import mode_accuracy, retrieval_loss, get_logits
 
 
 class Experiment(pl.LightningModule):
@@ -26,16 +26,6 @@ class Experiment(pl.LightningModule):
         return self.model(pixels, text, mode=mode)
 
 
-    def retrieval_loss(self, t2i_embs, i2t_embs):
-        logits_per_image = i2t_embs @ t2i_embs.t()
-        logits_per_text = logits_per_image.t()
-
-        caption_loss = contrastive_loss(logits_per_text)
-        image_loss = contrastive_loss(logits_per_image)
-        
-        return (caption_loss + image_loss) / 2.0
-
-
     def training_step(self, batch, batch_idx):
         pixels, text = batch
         opt = self.optimizers()
@@ -43,19 +33,27 @@ class Experiment(pl.LightningModule):
 
         losses = {f"{mode}_loss/train":0 for mode in self.modes}
         for mode in self.modes:
-            output, i2t_embs, t2i_embs = self.forward(pixels, text, mode=mode)
+            output, t2i_embs, i2t_embs, full_labels, last_logits = self.forward(pixels, text, mode=mode)
             loss = output.loss
 
             if mode == "retrieval":
-                loss += self.retrieval_loss(t2i_embs, i2t_embs)
+                logits_per_image, logits_per_text = get_logits(t2i_embs, i2t_embs)
+                loss += retrieval_loss(logits_per_image, logits_per_text)
 
             opt.zero_grad()
             self.manual_backward(loss)
             self.clip_gradients(opt, gradient_clip_val=opt_config['gradient_clip_val'], gradient_clip_algorithm="norm")
-
             opt.step()
 
+            if mode == "caption":
+                log_acc_dict = mode_accuracy(mode=mode, output=output.logits, full_labels=full_labels)
+            elif mode == "retrieval":
+                log_acc_dict = mode_accuracy(mode=mode, logits_per_image=logits_per_image, logits_per_text=logits_per_text)
+
             losses[f"{mode}_loss/train"] = loss.item()
+
+            log_acc_dict = {f"{k}/train": v for k, v in log_acc_dict.items()}
+            self.log_dict(log_acc_dict, prog_bar=True)
 
         self.log_dict(losses, prog_bar=True)
         return losses
@@ -67,16 +65,26 @@ class Experiment(pl.LightningModule):
 
         losses = {f"{mode}_loss/val":0 for mode in self.modes}
         for mode in self.modes:
-            output, i2t_embs, t2i_embs = self.forward(pixels, text, mode=mode)
+            output, t2i_embs, i2t_embs, full_labels, last_logits = self.forward(pixels, text, mode=mode)
             loss = output.loss
 
             if mode == "retrieval":
-                loss += self.retrieval_loss(t2i_embs, i2t_embs)
+                logits_per_image, logits_per_text = get_logits(t2i_embs, i2t_embs)
+                loss += retrieval_loss(t2i_embs, i2t_embs)
+
+            if mode == "caption":
+                log_acc_dict = mode_accuracy(mode=mode, output=output.logits, full_labels=full_labels)
+            elif mode == "retrieval":
+                log_acc_dict = mode_accuracy(mode=mode, logits_per_image=logits_per_image, logits_per_text=logits_per_text)
 
             losses[f"{mode}_loss/val"] = loss.item()
 
+            log_acc_dict = {f"{k}/val": v for k, v in log_acc_dict.items()}
+            self.log_dict(log_acc_dict, prog_bar=True)
+
         self.log_dict(losses, prog_bar=True)
         return losses
+
 
     def configure_optimizers(self):
         opt_config = self.config['optimizer']

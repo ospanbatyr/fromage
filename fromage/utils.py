@@ -7,8 +7,9 @@ import pydicom as dicom
 from pathlib import Path
 from skimage import io
 import re
-import string
 import os
+import string
+import warnings
 import os.path as osp
 from PIL import Image, ImageFile, UnidentifiedImageError
 
@@ -27,7 +28,7 @@ class RETTokenCallback(pl.Callback):
 def create_callbacks(config, log_dir):
     checkpoints_path = osp.join(log_dir, 'checkpoints', config['logger']['name'])
     os.makedirs(checkpoints_path, exist_ok=True)
-    
+
     config['checkpoint']['dirpath'] = checkpoints_path
     checkpoint_callback = pl.callbacks.ModelCheckpoint(**config['checkpoint'])
     
@@ -58,8 +59,76 @@ def create_logger(config):
     return logger
 
 
-def contrastive_loss(logits):
+def contrastive_loss(logits: torch.Tensor):
     return F.cross_entropy(logits, torch.arange(len(logits), device=logits.device))
+
+
+def get_logits(t2i_embs: torch.Tensor, i2t_embs: torch.Tensor):
+    logits_per_image = i2t_embs @ t2i_embs.t()
+    logits_per_text = logits_per_image.t()
+    return logits_per_image, logits_per_text
+
+
+def retrieval_loss(logits_per_image: torch.Tensor, logits_per_text: torch.Tensor):
+    caption_loss = contrastive_loss(logits_per_text)
+    image_loss = contrastive_loss(logits_per_image)
+    return (caption_loss + image_loss) / 2.0
+
+
+def accuracy(output: torch.Tensor, target: torch.Tensor, padding: int, topk: tuple):
+    with torch.no_grad():
+        maxk = max(topk)
+        if output.shape[-1] < maxk:
+            warnings.warn("Output example count is smaller than maxk", Warning)
+        
+        maxk = min(maxk, output.shape[-1])
+        bsz = target.shape[0]
+
+        # Take topk along the last dimension
+        _, pred = output.topk(maxk, -1, largest=True, sorted=True)
+        
+        mask = (target != padding).type(target.dtype)
+        target_expand = target[..., None].expand_as(pred)
+        correct = pred.eq(target_expand)
+        correct = correct * mask[..., None].expand_as(correct)
+
+        res = []
+        for k in topk:
+            correct_k = correct[..., :k].reshape(-1).float().sum(0, keepdim=True)
+            res.append(correct_k.mul_(100.0 / mask.sum()))
+
+        return res
+
+
+def contrastive_acc(logits: torch.Tensor, topk: tuple) -> torch.Tensor:
+    target = torch.arange(len(logits), device=logits.device)
+    return accuracy(logits, target, -1, topk)
+
+
+def mode_accuracy(mode: str, **kwargs) -> dict:
+    log_dict = {}
+    if mode == "caption":
+        output, full_labels = kwargs['output'], kwargs['full_labels']
+        padding, topk = -100, (1, 5)
+
+        acc1, acc5 = accuracy(output[:, :-1, :], full_labels[:, 1:], padding=padding, topk=topk)
+        log_dict["caption/acc1"] = acc1
+        log_dict["caption/acc5"] = acc5
+
+    elif mode == "retrieval":
+        logits_per_image = kwargs['logits_per_image']
+        logits_per_text = kwargs['logits_per_text']
+
+        caption_acc1, caption_acc5 = contrastive_acc(logits_per_text, topk=(1, 5))
+        image_acc1, image_acc5 = contrastive_acc(logits_per_image, topk=(1, 5))
+        log_dict["retrieval/caption_acc1"] = caption_acc1
+        log_dict["retrieval/caption_acc5"] = caption_acc5
+        log_dict["retrieval/image_acc1"] = image_acc1
+        log_dict["retrieval/image_acc5"] = image_acc5
+
+    return log_dict
+
+
 
 
 class ExpandChannels:

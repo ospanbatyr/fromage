@@ -43,7 +43,7 @@ checkpoint:
   save_top_k: 1
   save_last: true
   verbose: true
-  monitor: "caption_loss"
+  monitor: "caption_loss/train"
   mode: "min"
 
 ckpt_path: 
