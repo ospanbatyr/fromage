@@ -7,7 +7,7 @@ from torchvision.models import resnet50, ResNet50_Weights
 from transformers import OPTForCausalLM, AutoTokenizer, AutoModelForCausalLM
 from torchvision.models.feature_extraction import get_graph_node_names
 from torchvision.models.feature_extraction import create_feature_extractor
-from .data import image_transform, RESIZE, CENTER_CROP_SIZE
+from .data import cxr_image_transform, coco_image_transform
 
 VM_EMBED_DIMS = {
     'biovil': 2048,
@@ -66,11 +66,10 @@ def get_vm_embed_dim(vm_name):
 
 
 class FromageModel(nn.Module):
-    def __init__(self, device, tokenizer, ret_token_idx, config):
+    def __init__(self, tokenizer, ret_token_idx, config):
         super().__init__()
         self.modes = ('caption', 'retrieval')
         self.config = config
-        self.device = device
         self.tokenizer = tokenizer
         self.ret_token_idx = ret_token_idx
         self._init_language_model()
@@ -127,7 +126,7 @@ class FromageModel(nn.Module):
     
     def encode_images(self, pixel_values, mode):
         assert mode in self.modes, f'Mode must be in {str(self.modes)}, got {mode} instead'
-        pixel_values = pixel_values.to(self.device)
+        pixel_values = pixel_values.to(self.logit_scale.device)
 
         with torch.no_grad():
             img_embs = self.vm(pixel_values)
@@ -158,7 +157,7 @@ class FromageModel(nn.Module):
             text_inputs, return_tensors="pt", 
             padding="max_length", truncation=True, 
             max_length=max_length
-        ).to(self.device)
+        ).to(self.logit_scale.device)
 
         text_lens = text_inputs.attention_mask.sum(dim=1)
 
@@ -177,7 +176,7 @@ class FromageModel(nn.Module):
 
             labels = text_inputs.input_ids
             text_embs = self.input_embeddings(labels)
-            additional_mask = torch.ones(img_embs.shape[:2], dtype=torch.int64).to(self.device)
+            additional_mask = torch.ones(img_embs.shape[:2], dtype=torch.int64).to(self.logit_scale.device)
             attention_mask = torch.cat([additional_mask, text_inputs.attention_mask], dim=1)
 
             '''
@@ -187,7 +186,7 @@ class FromageModel(nn.Module):
             Source: [https://huggingface.co/transformers/v4.4.2/custom_datasets.html](https://huggingface.co/transformers/v4.4.2/custom_datasets.html)
             '''
 
-            full_labels = torch.full(img_embs.shape[:2], -100).to(self.device)
+            full_labels = torch.full(img_embs.shape[:2], -100).to(self.logit_scale.device)
             full_labels = torch.cat([full_labels, labels], dim=1)
 
             input_embs = torch.cat([img_embs, text_embs], dim=1)
@@ -255,7 +254,7 @@ class FromageModel(nn.Module):
                         token_weights = logits.exp()
                         next_token = torch.multinomial(token_weights, 1)
 
-                    next_token = next_token.long().to(self.device)
+                    next_token = next_token.long().to(self.logit_scale.device)
                     if out is not None:
                         out = torch.cat([out, next_token], dim=1)
                     else:
@@ -279,11 +278,11 @@ class FromageModel(nn.Module):
 class Fromage(nn.Module):
     def __init__(self, device, config=dict()):
         super().__init__()
-        self.device = device
         self.config = config
+        self.device = device
         self._init_tokenizer()
         self._init_inference_img_transform()
-        self.model = FromageModel(device=self.device, tokenizer=self.tokenizer, ret_token_idx=self.ret_token_idx, config=self.model_config)
+        self.model = FromageModel(tokenizer=self.tokenizer, ret_token_idx=self.ret_token_idx, config=self.model_config)
     
 
     @property
@@ -297,9 +296,12 @@ class Fromage(nn.Module):
 
     
     def _init_inference_img_transform(self) -> None:
-        resize = self.dataset_config['resize']
-        center_crop_size = self.dataset_config['center_crop_size']
-        self.img_transform = image_transform(resize=resize, center_crop_size=center_crop_size, train=False) 
+        if self.dataset_config["name"] == "COCO":
+            self.img_transform = coco_image_transform(train=False)
+        elif self.dataset_config["name"] == "MIMIC-CXR-JPG":
+            resize = self.dataset_config['resize']
+            center_crop_size = self.dataset_config['center_crop_size']
+            self.img_transform = cxr_image_transform(resize=resize, center_crop_size=center_crop_size, train=False) 
 
 
     def _init_tokenizer(self) -> None:
@@ -342,7 +344,7 @@ class Fromage(nn.Module):
                 input_embs.append(vis_emb)
             elif type(p) == str:
                 tokens = self.model.tokenizer(p, add_special_tokens=True, return_tensors="pt")
-                text_ids = tokens.input_ids.to(self.device)
+                text_ids = tokens.input_ids.to(self.logit_scale.device)
                 if not add_bos:
                     text_ids = text_ids[:, 1:]
                 else:

@@ -25,7 +25,9 @@ class RETTokenCallback(pl.Callback):
 
 
 def create_callbacks(config, log_dir):
-    checkpoints_path = osp.join(log_dir, 'checkpoints')
+    checkpoints_path = osp.join(log_dir, 'checkpoints', config['logger']['name'])
+    os.makedirs(checkpoints_path, exist_ok=True)
+    
     config['checkpoint']['dirpath'] = checkpoints_path
     checkpoint_callback = pl.callbacks.ModelCheckpoint(**config['checkpoint'])
     

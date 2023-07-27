@@ -36,8 +36,7 @@ def main(config):
     if logger is not None and logger_conf["version"] != "debug":
         callbacks, ckpt_path = create_callbacks(config, logger_conf["save_dir"])
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    experiment = Experiment(device, config)
+    experiment = Experiment(config)
     trainer = pl.Trainer(
         logger=logger,
         callbacks=callbacks,

@@ -3,7 +3,7 @@ import torchvision
 import transformers
 from torch.utils.data import Dataset
 from torch.utils.data.dataloader import DataLoader
-from torchvision.transforms import Compose, Resize, ToTensor, CenterCrop, RandomHorizontalFlip, RandomAffine
+from torchvision.transforms import Compose, Resize, ToTensor, CenterCrop, RandomHorizontalFlip, RandomAffine, Normalize, RandomCrop
 from pytorch_lightning import LightningDataModule
 from transformers import AutoTokenizer
 
@@ -15,6 +15,7 @@ import os
 import os.path as osp
 from pathlib import Path
 import csv
+import json
 from .utils import ExpandChannels, load_image
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -49,20 +50,20 @@ def cxr_image_transform(resize: int, center_crop_size: int, train: bool) -> Comp
 
 
 def coco_image_transform(train: bool):
-    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    normalize = Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     if train:
-        img_transform = transforms.Compose([
-            transforms.Resize(232, interpolation=InterpolationMode.BILINEAR),
-            transforms.RandomCrop(224),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(),
+        img_transform = Compose([
+            Resize(232),
+            RandomCrop(224),
+            RandomHorizontalFlip(),
+            ToTensor(),
             normalize,
         ])
     else:
-        img_transform = transforms.Compose([
-            transforms.Resize(232, interpolation=InterpolationMode.BILINEAR),
-            transforms.CenterCrop(224),
-            transforms.ToTensor(),
+        img_transform = Compose([
+            Resize(232),
+            CenterCrop(224),
+            ToTensor(),
             normalize,
         ])
     return img_transform
@@ -105,7 +106,7 @@ class COCODataset(Dataset):
     def __init__(self, path, split, year, image_transform):
         super().__init__()
         assert split in ('train', 'val')
-        assert val in (2014, 2017)
+        assert year in (2014, 2017)
 
         self.year = year
         self.split = split
@@ -116,7 +117,7 @@ class COCODataset(Dataset):
 
     def setup_dataset(self):
         self.split_name = f'{self.split}{self.year}'
-        self.image_dir = osp.jpin(self.path, self.split_name)
+        self.image_dir = osp.join(self.path, self.split_name)
         self.annotation_file = osp.join(self.path, 'annotations', f'captions_{self.split_name}.json')
 
         with open(self.annotation_file, "r") as f:
@@ -131,7 +132,7 @@ class COCODataset(Dataset):
         self.image_dict = image_dict
 
     def __len__(self):
-        return self.annotations
+        return len(self.annotations)
 
     def _read_image(self, idx):
         image_id = self.annotations[idx]['image_id']
@@ -148,11 +149,10 @@ class COCODataset(Dataset):
             try:
                 image = self._read_image(idx)
                 caption = self.annotations[idx]['caption']
+                return image, caption
             except Exception as e:
                 print(str(e))
                 idx = np.random.randint(0, len(self))
-
-        return image, caption
 
 
 class BaseDataModule(LightningDataModule):

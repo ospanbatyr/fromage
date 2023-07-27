@@ -7,12 +7,12 @@ from .utils import contrastive_loss
 
 
 class Experiment(pl.LightningModule):
-    def __init__(self, device, config=dict()):
+    def __init__(self, config=dict()):
         super().__init__()
         self.automatic_optimization = False
 
         self.config = config
-        self.model = Fromage(device, config)
+        self.model = Fromage(self.device, config)
         self.modes = ('caption', 'retrieval')
         self.save_hyperparameters(config)
     
@@ -36,12 +36,12 @@ class Experiment(pl.LightningModule):
         return (caption_loss + image_loss) / 2.0
 
 
-    def training_step(self, batch, batch_index):
+    def training_step(self, batch, batch_idx):
         pixels, text = batch
         opt = self.optimizers()
         opt_config = self.config['optimizer']
 
-        losses = {f"{mode}_loss":0 for mode in self.modes}
+        losses = {f"{mode}_loss/train":0 for mode in self.modes}
         for mode in self.modes:
             output, i2t_embs, t2i_embs = self.forward(pixels, text, mode=mode)
             loss = output.loss
@@ -52,22 +52,42 @@ class Experiment(pl.LightningModule):
             opt.zero_grad()
             self.manual_backward(loss)
             self.clip_gradients(opt, gradient_clip_val=opt_config['gradient_clip_val'], gradient_clip_algorithm="norm")
+
             opt.step()
 
-            losses[f"{mode}_loss"] = loss.item()
+            losses[f"{mode}_loss/train"] = loss.item()
 
         self.log_dict(losses, prog_bar=True)
         return losses
 
 
+    @torch.no_grad()
+    def validation_step(self, batch, batch_idx):
+        pixels, text = batch
+
+        losses = {f"{mode}_loss/val":0 for mode in self.modes}
+        for mode in self.modes:
+            output, i2t_embs, t2i_embs = self.forward(pixels, text, mode=mode)
+            loss = output.loss
+
+            if mode == "retrieval":
+                loss += self.retrieval_loss(t2i_embs, i2t_embs)
+
+            losses[f"{mode}_loss/val"] = loss.item()
+
+        self.log_dict(losses, prog_bar=True)
+        return losses
+
     def configure_optimizers(self):
         opt_config = self.config['optimizer']
         opt_name = opt_config['algorithm']
         opt_params = opt_config['params']
+        parameters = filter(lambda p: p.requires_grad, self.model.parameters())
+
         if opt_name == "AdamW":
-            optimizer = optim.AdamW(self.parameters(), **opt_params)
+            optimizer = optim.AdamW(parameters, **opt_params)
         elif opt_name == "Adam":
-            optimizer = optim.Adam(self.parameters(), **opt_params)
+            optimizer = optim.Adam(parameters, **opt_params)
         else:
             raise NotImplementedError(f"Optimizer '{opt_name}' is not configured")
 
