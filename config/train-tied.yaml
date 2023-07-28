@@ -5,10 +5,12 @@ model:
   image_dropout: 0.1
   shared_emb_dim: 512
   max_length: 112
+  num_img_tokens: 1
 
 trainer:
   accelerator: "gpu"
   devices: 1
+  precision: "16-mixed"
   max_epochs: 10
 
 # data loader

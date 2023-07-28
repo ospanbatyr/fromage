@@ -1,19 +1,21 @@
 model:
   vision_model: "biovil"
-  language_model: "facebook/opt-125m"
+  language_model: "facebook/opt-350m"
   tie_mappers: false
   image_dropout: 0.1
   shared_emb_dim: 512
   max_length: 112
+  num_img_tokens: 2
 
 trainer:
   accelerator: "gpu"
   devices: 1
+  precision: "16-mixed"
   max_epochs: 10
 
 # data loader
 loader:
-  batch_size: 72
+  batch_size: 64
   pin_memory: true
   num_workers: 4
 
@@ -29,7 +31,7 @@ dataset:
   resize: 512
   center_crop_size: 480
   tsv_path: "data/MIMIC_JPG.tsv"
-  img_path: "/kuacc/users/oince22/hpc_run/physionet.org/files/mimic-cxr-jpg/2.0.0/files/"
+  img_path: "/datasets/mimic/cxr-jpg/physionet.org/files/mimic-cxr-jpg/2.0.0/files/"
 
 optimizer:
   algorithm: 'AdamW'

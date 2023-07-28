@@ -3,7 +3,7 @@ from setuptools import setup
 setup(
     name='fromage',
     version='0.1',
-    description='Grounding Language Models to Images for Multimodal Generation',
+    description='Grounding Language Models to Images for Multimodal Generation - Unofficial Implementation',
     url='https://github.com/ospanbatyr/fromage',
     author='Osman Batur Ince',
     author_email='osmanbaturince@gmail.com',

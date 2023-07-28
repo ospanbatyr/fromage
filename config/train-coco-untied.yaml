@@ -5,6 +5,7 @@ model:
   image_dropout: 0.1
   shared_emb_dim: 512
   max_length: 20
+  num_img_tokens: 2
 
 trainer:
   accelerator: "gpu"
@@ -20,9 +21,9 @@ loader:
 
 # logger (tensorboard)
 logger:
-  name: "coco-run-2-untied"
+  name: "coco-run-2-test-multoks"
   project: "fromage"
-  version: "coco-run-2-untied"
+  version: "coco-run-2-test-multoks"
   save_dir: "logs/"
 
 dataset:

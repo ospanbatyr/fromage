@@ -112,12 +112,14 @@ class FromageModel(nn.Module):
 
 
     def _init_mappers(self) -> None:
-        self.caption_mapping = nn.Linear(self.vm_embed_dim, self.lm_embed_dim)
+        self.num_img_tokens = self.config['num_img_tokens']
+
+        self.caption_mapping = nn.Linear(self.vm_embed_dim, self.lm_embed_dim * self.num_img_tokens)
         self.image_dropout = nn.Dropout(self.config['image_dropout'])
 
         if self.config['tie_mappers']:
             self.ret_i2t_mapping = self.caption_mapping
-            self.ret_t2i_mapping = nn.Linear(self.lm_embed_dim, self.lm_embed_dim)
+            self.ret_t2i_mapping = nn.Linear(self.lm_embed_dim, self.lm_embed_dim * self.num_img_tokens)
         else:
             self.shared_emb_dim = self.config['shared_emb_dim']
             self.ret_i2t_mapping = nn.Linear(self.vm_embed_dim, self.shared_emb_dim)
@@ -172,7 +174,7 @@ class FromageModel(nn.Module):
 
         if mode == "caption":
             img_embs = self.encode_images(pixel_values, mode=mode)
-            img_embs = img_embs.unsqueeze(1)
+            img_embs = img_embs.reshape(img_embs.shape[0], self.num_img_tokens, -1)
 
             labels = text_inputs.input_ids
             text_embs = self.input_embeddings(labels)

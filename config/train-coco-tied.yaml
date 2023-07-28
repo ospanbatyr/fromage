@@ -5,6 +5,7 @@ model:
   image_dropout: 0.1
   shared_emb_dim: 512
   max_length: 20
+  num_img_tokens: 1
 
 trainer:
   accelerator: "gpu"

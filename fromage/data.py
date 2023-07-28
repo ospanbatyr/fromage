@@ -19,7 +19,6 @@ import json
 from .utils import ExpandChannels, load_image
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
-IMG_ROOT = '/kuacc/users/oince22/hpc_run/physionet.org/files/mimic-cxr-jpg/2.0.0/files/' # TODO needs to change
 
 # values from BioViL repository
 RESIZE = 512
@@ -32,8 +31,8 @@ def cxr_image_transform(resize: int, center_crop_size: int, train: bool) -> Comp
 
     if train:
         transforms = [
+            RandomAffine(data_aug_rot, translate=(data_aug_trans, data_aug_trans), scale=(1.0-data_aug_scale, 1.0+data_aug_scale)),
             Resize(resize), 
-            RandomAffine(data_aug_rot, translate=(data_aug_trans, data_aug_trans), scale=(1.0-data_aug_scale, 1.0+data_aug_scale)), 
             CenterCrop(center_crop_size), 
             ToTensor(), 
             ExpandChannels()
