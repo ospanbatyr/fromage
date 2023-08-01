@@ -16,7 +16,10 @@ import os.path as osp
 from pathlib import Path
 import csv
 import json
-from .utils import ExpandChannels, load_image
+try:
+    from .utils import ExpandChannels, load_image
+except: 
+    from utils import ExpandChannels, load_image
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 

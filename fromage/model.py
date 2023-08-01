@@ -7,7 +7,13 @@ from torchvision.models import resnet50, ResNet50_Weights
 from transformers import OPTForCausalLM, AutoTokenizer, AutoModelForCausalLM
 from torchvision.models.feature_extraction import get_graph_node_names
 from torchvision.models.feature_extraction import create_feature_extractor
-from .data import cxr_image_transform, coco_image_transform
+from pathlib import Path
+try:
+    from .data import cxr_image_transform, coco_image_transform
+    from .utils import load_image
+except:
+    from data import cxr_image_transform, coco_image_transform
+    from utils import load_image
 
 VM_EMBED_DIMS = {
     'biovil': 2048,
@@ -39,7 +45,10 @@ class BioViL(nn.Module):
         self.feature_extractor = self._get_feature_extractor()
         
     def _initialize_resnet(self):
-        model_state_dict = torch.load("bin/biovil_backbone_2048.pt")
+        try:
+            model_state_dict = torch.load("bin/biovil_backbone_2048.pt")
+        except:
+            model_state_dict = torch.load("../bin/biovil_backbone_2048.pt")
         self.model.load_state_dict(model_state_dict)
     
     def _get_feature_extractor(self):
@@ -112,8 +121,11 @@ class FromageModel(nn.Module):
 
 
     def _init_mappers(self) -> None:
-        self.num_img_tokens = self.config['num_img_tokens']
-
+        try:
+            self.num_img_tokens = self.config['num_img_tokens']
+        except:
+            self.num_img_tokens = 1 # hardcoded due to old training, can be removed
+        
         self.caption_mapping = nn.Linear(self.vm_embed_dim, self.lm_embed_dim * self.num_img_tokens)
         self.image_dropout = nn.Dropout(self.config['image_dropout'])
 
@@ -217,66 +229,66 @@ class FromageModel(nn.Module):
         return output, t2i_embs, i2t_embs, full_labels, last_logits
 
 
-        def generate(self, embeddings, max_len, temperature=0.0, top_p=1.0, filter_value=float("-inf")):
-            bsz, seq_len, _ = embeddings.shape
-            out = None
-            output_embeddings = []
-            output_logits = []
+    def generate(self, embeddings, max_len, temperature=0.0, top_p=1.0, filter_value=float("-inf")):
+        bsz, seq_len, _ = embeddings.shape
+        out = None
+        output_embeddings = []
+        output_logits = []
 
-            with torch.no_grad():
-                for i in range(max_len):
-                    output = self.lm(inputs_embeds=embeddings, use_cache=False, output_hidden_states=True)
-                    last_hidden_state = output.hidden_states[-1]
-                    last_hidden_state = last_hidden_state[torch.arange(last_hidden_state.shape[0]), seq_len-1, :]
-                    last_hidden_state = self.ret_t2i_mapping(last_hidden_state)
-                    last_embedding = last_hidden_state / last_hidden_state.norm(dim=-1, keepdim=True)
+        with torch.no_grad():
+            for i in range(max_len):
+                output = self.lm(inputs_embeds=embeddings, use_cache=False, output_hidden_states=True)
+                last_hidden_state = output.hidden_states[-1]
+                last_hidden_state = last_hidden_state[torch.arange(last_hidden_state.shape[0]), seq_len-1, :]
+                last_hidden_state = self.ret_t2i_mapping(last_hidden_state)
+                last_embedding = last_hidden_state / last_hidden_state.norm(dim=-1, keepdim=True)
 
-                    output_embeddings.append(last_embedding)
-                    logits = output.logits[:,-1,:]
-                    output_logits.append(logits)
+                output_embeddings.append(last_embedding)
+                logits = output.logits[:,-1,:]
+                output_logits.append(logits)
 
-                    if temperature == 0.0:
-                        if top_p != 1.0:
-                            assert False, "top_p cannot be set in greedy decoding"
-                        next_token = torch.argmax(logits, keepdim=True, dim=-1)
-                    else:
-                        logits = logits / temperature
+                if temperature == 0.0:
+                    if top_p != 1.0:
+                        assert False, "top_p cannot be set in greedy decoding"
+                    next_token = torch.argmax(logits, keepdim=True, dim=-1)
+                else:
+                    logits = logits / temperature
 
-                    if top_p < 1.0:
-                        assert top_p > 0, "0 < top_p <= 1 is not satisfied"
-                        sorted_logits, sorted_indices = torch.sort(logits, descending=True)
-                        cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
+                if top_p < 1.0:
+                    assert top_p > 0, "0 < top_p <= 1 is not satisfied"
+                    sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+                    cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
 
-                        sorted_indices_to_remove = cumulative_probs > top_p
-                        sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
-                        sorted_indices_to_remove[..., 0] = 0
+                    sorted_indices_to_remove = cumulative_probs > top_p
+                    sorted_indices_to_remove[..., 1:] = sorted_indices_to_remove[..., :-1].clone()
+                    sorted_indices_to_remove[..., 0] = 0
 
-                        for j in range(sorted_indices.shape[0]):
-                            indices_to_remove = sorted_indices[j, sorted_indices_to_remove[j, :]]
-                            logits[j, indices_to_remove] = filter_value
+                    for j in range(sorted_indices.shape[0]):
+                        indices_to_remove = sorted_indices[j, sorted_indices_to_remove[j, :]]
+                        logits[j, indices_to_remove] = filter_value
 
-                        token_weights = logits.exp()
-                        next_token = torch.multinomial(token_weights, 1)
+                    token_weights = logits.exp()
+                    next_token = torch.multinomial(token_weights, 1)
 
-                    next_token = next_token.long().to(self.logit_scale.device)
-                    if out is not None:
-                        out = torch.cat([out, next_token], dim=1)
-                    else:
-                        out = next_token
+                next_token = next_token.long().to(self.logit_scale.device)
+                if out is not None:
+                    out = torch.cat([out, next_token], dim=1)
+                else:
+                    out = next_token
 
-                    next_embedding = self.input_embeddings(next_token)
-                    embeddings = torch.cat([embeddings, next_embedding], dim=1)
+                next_embedding = self.input_embeddings(next_token)
+                embeddings = torch.cat([embeddings, next_embedding], dim=1)
 
-                    if (self.tokenizer.eos_token_id and (next_token == self.tokenizer.eos_token_id).all()):
-                        break
+                if (self.tokenizer.eos_token_id and (next_token == self.tokenizer.eos_token_id).all()):
+                    break
 
-            return out, output_embeddings, output_logits
+        return out, output_embeddings, output_logits
 
-        
-        def train(self, mode=True):
-            super(FromageModel, self).train(mode=mode)
-            self.lm.eval()
-            self.vm.eval()
+
+    def train(self, mode=True):
+        super(FromageModel, self).train(mode=mode)
+        self.lm.eval()
+        self.vm.eval()
 
 
 class Fromage(nn.Module):
@@ -348,7 +360,7 @@ class Fromage(nn.Module):
                 input_embs.append(vis_emb)
             elif type(p) == str:
                 tokens = self.model.tokenizer(p, add_special_tokens=True, return_tensors="pt")
-                text_ids = tokens.input_ids.to(self.logit_scale.device)
+                text_ids = tokens.input_ids.to(self.model.logit_scale.device)
                 if not add_bos:
                     text_ids = text_ids[:, 1:]
                 else:

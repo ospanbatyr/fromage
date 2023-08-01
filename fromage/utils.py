@@ -12,6 +12,7 @@ import string
 import warnings
 import os.path as osp
 from PIL import Image, ImageFile, UnidentifiedImageError
+from torchvision.transforms import Compose, Resize, ToTensor, CenterCrop, RandomHorizontalFlip, RandomAffine
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
