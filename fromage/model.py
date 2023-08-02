@@ -114,7 +114,7 @@ class FromageModel(nn.Module):
     def _init_mappers(self) -> None:
         self.num_img_tokens = self.config['num_img_tokens']
 
-        self.caption_mapping = nn.Linear(self.vm_embed_dim, self.lm_embed_dim * self.num_img_tokens)
+        self.caption_mapping = nn.Linear(self.vm_embed_dim, self.lm_embed_dim * self.num_img_tokens) # VM_EMBED_DIM x LM_EMBED_DIM
         self.image_dropout = nn.Dropout(self.config['image_dropout'])
 
         if self.config['tie_mappers']:
@@ -203,7 +203,7 @@ class FromageModel(nn.Module):
 
             output = self.lm(inputs_embeds=input_embs, attention_mask=text_inputs.attention_mask, labels=full_labels, output_hidden_states=True)
 
-            last_hidden_state = output.hidden_states[-1]
+            last_hidden_state = output.hidden_states[-1] # decoder-only, 12 decoder layer, take last layer's hidden state
             ret_embs = last_hidden_state[torch.arange(last_hidden_state.shape[0]), text_lens-1, :]
             t2i_embs = self.ret_t2i_mapping(ret_embs)
 
@@ -227,7 +227,7 @@ class FromageModel(nn.Module):
                 for i in range(max_len):
                     output = self.lm(inputs_embeds=embeddings, use_cache=False, output_hidden_states=True)
                     last_hidden_state = output.hidden_states[-1]
-                    last_hidden_state = last_hidden_state[torch.arange(last_hidden_state.shape[0]), seq_len-1, :]
+                    last_hidden_state = last_hidden_state[torch.arange(last_hidden_state.shape[0]), seq_len-1, :] # 
                     last_hidden_state = self.ret_t2i_mapping(last_hidden_state)
                     last_embedding = last_hidden_state / last_hidden_state.norm(dim=-1, keepdim=True)
 
@@ -242,9 +242,9 @@ class FromageModel(nn.Module):
                     else:
                         logits = logits / temperature
 
-                    if top_p < 1.0:
+                    if top_p < 1.0: # top p sampling. 
                         assert top_p > 0, "0 < top_p <= 1 is not satisfied"
-                        sorted_logits, sorted_indices = torch.sort(logits, descending=True)
+                        sorted_logits, sorted_indices = torch.sort(logits, descending=True) # 
                         cumulative_probs = torch.cumsum(F.softmax(sorted_logits, dim=-1), dim=-1)
 
                         sorted_indices_to_remove = cumulative_probs > top_p
