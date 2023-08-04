@@ -43,6 +43,8 @@ def main(config):
         **config["trainer"])
     
     trainer.fit(experiment, datamodule=dm)
+    trainer.test(experiment, datamodule=dm)
+
 
 
 if __name__ == "__main__":

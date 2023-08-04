@@ -86,6 +86,33 @@ class Experiment(pl.LightningModule):
         return losses
 
 
+    @torch.no_grad()
+    def test_step(self, batch, batch_idx):
+        pixels, text = batch
+
+        losses = {f"{mode}_loss/test":0 for mode in self.modes}
+        for mode in self.modes:
+            output, t2i_embs, i2t_embs, full_labels, last_logits = self.forward(pixels, text, mode=mode)
+            loss = output.loss
+
+            if mode == "retrieval":
+                logits_per_image, logits_per_text = get_logits(t2i_embs, i2t_embs)
+                loss += retrieval_loss(t2i_embs, i2t_embs)
+
+            if mode == "caption":
+                log_acc_dict = mode_accuracy(mode=mode, output=output.logits, full_labels=full_labels)
+            elif mode == "retrieval":
+                log_acc_dict = mode_accuracy(mode=mode, logits_per_image=logits_per_image, logits_per_text=logits_per_text)
+
+            losses[f"{mode}_loss/test"] = loss.item()
+
+            log_acc_dict = {f"{k}/test": v for k, v in log_acc_dict.items()}
+            self.log_dict(log_acc_dict, prog_bar=True)
+
+        self.log_dict(losses, prog_bar=True)
+        return losses
+
+
     def configure_optimizers(self):
         opt_config = self.config['optimizer']
         opt_name = opt_config['algorithm']

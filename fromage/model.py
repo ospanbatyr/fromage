@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import os.path as osp
 from typing import Callable, Optional, Tuple, List, Dict
 import numpy as np
 from torchvision.models import resnet50, ResNet50_Weights
@@ -8,6 +9,9 @@ from transformers import OPTForCausalLM, AutoTokenizer, AutoModelForCausalLM
 from torchvision.models.feature_extraction import get_graph_node_names
 from torchvision.models.feature_extraction import create_feature_extractor
 from .data import cxr_image_transform, coco_image_transform
+
+BIN_DIR = osp.abspath(osp.join(__file__, "..", "bin"))
+
 
 VM_EMBED_DIMS = {
     'biovil': 2048,
@@ -39,7 +43,7 @@ class BioViL(nn.Module):
         self.feature_extractor = self._get_feature_extractor()
         
     def _initialize_resnet(self):
-        model_state_dict = torch.load("bin/biovil_backbone_2048.pt")
+        model_state_dict = torch.load(osp.join(BIN_DIR, "biovil_backbone_2048.pt"))
         self.model.load_state_dict(model_state_dict)
     
     def _get_feature_extractor(self):

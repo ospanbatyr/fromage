@@ -7,6 +7,8 @@ model:
   max_length: 20
   num_img_tokens: 2
 
+# num_img_tokens was 2 before inference
+
 trainer:
   accelerator: "gpu"
   devices: 1
@@ -21,9 +23,9 @@ loader:
 
 # logger (tensorboard)
 logger:
-  name: "coco-run-2-test-multoks"
+  name: "coco-run-untied-3"
   project: "fromage"
-  version: "coco-run-2-test-multoks"
+  version: "coco-run-untied-3"
   save_dir: "logs/"
 
 dataset:

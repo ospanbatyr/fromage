@@ -219,15 +219,31 @@ class MIMICDataModule(BaseDataModule):
     def _init_img_transform(self) -> None:
         resize = self.dataset_config['resize']
         center_crop_size = self.dataset_config['center_crop_size']
-        self.img_transform = cxr_image_transform(resize=resize, center_crop_size=center_crop_size, train=True)
+        self.train_img_transform = cxr_image_transform(resize=resize, center_crop_size=center_crop_size, train=True)
+        self.val_img_transform = cxr_image_transform(resize=resize, center_crop_size=center_crop_size, train=False)
 
     def _init_datasets(self) -> None:
-        dataset_path = self.dataset_config['tsv_path']
+        tsv_path = self.dataset_config['tsv_path']
         img_path = self.dataset_config['img_path']
+
+        train_tsv_path = tsv.path.replace("<SPLIT>", "train")
+        valid_tsv_path = tsv.path.replace("<SPLIT>", "valid")
+        test_tsv_path = tsv.path.replace("<SPLIT>", "test")
+
         self.train_data = MIMICDataset(
-            dataset_path=dataset_path,
+            dataset_path=train_tsv_path,
             img_path=img_path,
-            transform=self.img_transform
+            transform=self.train_img_transform
+        )
+        self.val_data = MIMICDataset(
+            dataset_path=valid_tsv_path,
+            img_path=img_path,
+            transform=self.val_img_transform
+        )
+        self.test_data = MIMICDataset(
+            dataset_path=test_tsv_path,
+            img_path=img_path,
+            transform=self.val_img_transform
         )
 
     def train_dataloader(self):
@@ -236,4 +252,22 @@ class MIMICDataModule(BaseDataModule):
             shuffle=True,
             **self.loader_config
         )
+
+    def val_dataloader(self):
+        return DataLoader(
+            self.val_data,
+            shuffle=False,
+            **self.loader_config
+        )
+
+    def test_dataloader(self):
+        return DataLoader(
+            self.test_data,
+            shuffle=False,
+            **self.loader_config
+        )
+
+    def predict_dataloader(self):
+        return self.val_dataloader()
+
         
