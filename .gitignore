@@ -8,3 +8,4 @@ bin/*
 notebooks/.ipynb_checkpoints/
 fromage/__pycache__/
 .ipynb_checkpoints/
+fromage.egg-info/

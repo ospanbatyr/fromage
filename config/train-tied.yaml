@@ -1,6 +1,6 @@
 model:
   vision_model: "biovil"
-  language_model: "facebook/opt-350m"
+  language_model: "facebook/opt-125m"
   tie_mappers: true
   image_dropout: 0.1
   max_length: 112
@@ -14,7 +14,7 @@ trainer:
 
 # data loader
 loader:
-  batch_size: 40
+  batch_size: 72
   pin_memory: true
   num_workers: 4
 

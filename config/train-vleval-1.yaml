@@ -1,5 +1,5 @@
 model:
-  vision_model: "biovil"
+  vision_model: "resnet-50-imagenet"
   language_model: "facebook/opt-125m"
   tie_mappers: false
   image_dropout: 0.1
@@ -21,9 +21,9 @@ loader:
 
 # logger (tensorboard)
 logger:
-  name: "untied_test_5"
+  name: "vl_eval_1"
   project: "fromage"
-  version: "untied_test_5"
+  version: "vl_eval_1"
   save_dir: "logs/"
 
 dataset:

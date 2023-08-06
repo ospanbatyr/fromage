@@ -1,6 +1,6 @@
 model:
-  vision_model: "biovil"
-  language_model: "facebook/opt-125m"
+  vision_model: "resnet-50-imagenet"
+  language_model: "emrecanacikgoz/opt-125m-MedMCQA-radiology"
   tie_mappers: false
   image_dropout: 0.1
   shared_emb_dim: 512
@@ -21,9 +21,9 @@ loader:
 
 # logger (tensorboard)
 logger:
-  name: "untied_test_5"
+  name: "vl_eval_2"
   project: "fromage"
-  version: "untied_test_5"
+  version: "vl_eval_2"
   save_dir: "logs/"
 
 dataset:

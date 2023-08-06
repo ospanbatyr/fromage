@@ -226,9 +226,9 @@ class MIMICDataModule(BaseDataModule):
         tsv_path = self.dataset_config['tsv_path']
         img_path = self.dataset_config['img_path']
 
-        train_tsv_path = tsv.path.replace("<SPLIT>", "train")
-        valid_tsv_path = tsv.path.replace("<SPLIT>", "valid")
-        test_tsv_path = tsv.path.replace("<SPLIT>", "test")
+        train_tsv_path = tsv_path.replace("<SPLIT>", "train")
+        valid_tsv_path = tsv_path.replace("<SPLIT>", "valid")
+        test_tsv_path = tsv_path.replace("<SPLIT>", "test")
 
         self.train_data = MIMICDataset(
             dataset_path=train_tsv_path,

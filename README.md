@@ -8,9 +8,11 @@
 
 3. Install packages via pip: `pip install -r requirements.txt`
 
-4. Download `MIMIC_JPG.tsv` and `biovil_backbone_2048.pt` from [Drive](https://drive.google.com/drive/u/0/folders/1w-JpJGtBCEgXpAdbm4qmdvE8EGjo-KkZ)
+4. Download `MIMIC_JPG_<SPLIT>.tsv`files and `biovil_backbone_2048.pt` from [Drive](https://drive.google.com/drive/u/0/folders/1w-JpJGtBCEgXpAdbm4qmdvE8EGjo-KkZ)
 
-5. Place `MIMIC_JPG.tsv` under `data/` folder and `biovil_backbone_2048.pt` under `bin/` folder.
+5. Place `MIMIC_JPG_<SPLIT>.tsv files` under `data/` folder and `biovil_backbone_2048.pt` under `bin/` folder.
+
+6. Run `pip install -e .` to install the fromage as an editable package.
 
 ### Run Experiments
 
