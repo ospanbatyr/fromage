@@ -21,9 +21,9 @@ loader:
 
 # logger (tensorboard)
 logger:
-  name: "coco-run-debug-acc"
+  name: "coco-run"
   project: "fromage"
-  version: "coco-run-debug-acc"
+  version: "coco-run"
   save_dir: "logs/"
 
 dataset:
