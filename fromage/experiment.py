@@ -2,8 +2,12 @@ import torch
 import torch.nn as nn
 from torch import optim
 import pytorch_lightning as pl
-from .model import Fromage
-from .utils import mode_accuracy, retrieval_loss, get_logits
+try:
+    from .model import Fromage
+    from .utils import mode_accuracy, retrieval_loss, get_logits
+except:
+    from model import Fromage
+    from utils import mode_accuracy, retrieval_loss, get_logits
 
 
 class Experiment(pl.LightningModule):

@@ -9,9 +9,14 @@ from torchvision.models import resnet50, ResNet50_Weights
 from transformers import OPTForCausalLM, AutoTokenizer, AutoModelForCausalLM
 from torchvision.models.feature_extraction import get_graph_node_names
 from torchvision.models.feature_extraction import create_feature_extractor
-from .data import cxr_image_transform, coco_image_transform
-from .utils import load_image
+try:
+    from .data import cxr_image_transform, coco_image_transform
+    from .utils import load_image
+except:
+    from data import cxr_image_transform, coco_image_transform
+    from utils import load_image
 
+    
 BIN_DIR = osp.abspath(osp.join(__file__, "..", "..", "bin"))
 
 
@@ -118,7 +123,10 @@ class FromageModel(nn.Module):
 
 
     def _init_mappers(self) -> None:
-        self.num_img_tokens = self.config['num_img_tokens']
+        try:
+            self.num_img_tokens = self.config['num_img_tokens']
+        except:
+            self.num_img_tokens = 1 # hardcoded due to old training, can be removed
 
         self.caption_mapping = nn.Linear(self.vm_embed_dim, self.lm_embed_dim * self.num_img_tokens) # VM_EMBED_DIM x LM_EMBED_DIM
         self.image_dropout = nn.Dropout(self.config['image_dropout'])

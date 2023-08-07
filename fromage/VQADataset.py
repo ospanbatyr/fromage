@@ -21,6 +21,8 @@ class VQADataset(data.Dataset):
     def __getitem__(self, index):
         
         image = self.get_image(index, self.image_transform)
+        if self.image_transform != None:
+            image = self.image_transform(image)
         question = self.get_question(index)
         answer = self.get_answer(index)
 

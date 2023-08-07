@@ -16,8 +16,11 @@ import os.path as osp
 from pathlib import Path
 import csv
 import json
-from .utils import ExpandChannels, load_image
-
+try:
+    from .utils import ExpandChannels, load_image
+except:
+    from utils import ExpandChannels, load_image
+    
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 # values from BioViL repository
@@ -219,31 +222,15 @@ class MIMICDataModule(BaseDataModule):
     def _init_img_transform(self) -> None:
         resize = self.dataset_config['resize']
         center_crop_size = self.dataset_config['center_crop_size']
-        self.train_img_transform = cxr_image_transform(resize=resize, center_crop_size=center_crop_size, train=True)
-        self.val_img_transform = cxr_image_transform(resize=resize, center_crop_size=center_crop_size, train=False)
+        self.img_transform = cxr_image_transform(resize=resize, center_crop_size=center_crop_size, train=True)
 
     def _init_datasets(self) -> None:
-        tsv_path = self.dataset_config['tsv_path']
+        dataset_path = self.dataset_config['tsv_path']
         img_path = self.dataset_config['img_path']
-
-        train_tsv_path = tsv_path.replace("<SPLIT>", "train")
-        valid_tsv_path = tsv_path.replace("<SPLIT>", "valid")
-        test_tsv_path = tsv_path.replace("<SPLIT>", "test")
-
         self.train_data = MIMICDataset(
-            dataset_path=train_tsv_path,
+            dataset_path=dataset_path,
             img_path=img_path,
-            transform=self.train_img_transform
-        )
-        self.val_data = MIMICDataset(
-            dataset_path=valid_tsv_path,
-            img_path=img_path,
-            transform=self.val_img_transform
-        )
-        self.test_data = MIMICDataset(
-            dataset_path=test_tsv_path,
-            img_path=img_path,
-            transform=self.val_img_transform
+            transform=self.img_transform
         )
 
     def train_dataloader(self):
@@ -252,22 +239,4 @@ class MIMICDataModule(BaseDataModule):
             shuffle=True,
             **self.loader_config
         )
-
-    def val_dataloader(self):
-        return DataLoader(
-            self.val_data,
-            shuffle=False,
-            **self.loader_config
-        )
-
-    def test_dataloader(self):
-        return DataLoader(
-            self.test_data,
-            shuffle=False,
-            **self.loader_config
-        )
-
-    def predict_dataloader(self):
-        return self.val_dataloader()
-
         
