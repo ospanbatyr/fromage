@@ -30,21 +30,26 @@ class VQADataset(data.Dataset):
     
     
 class VQA_RADDataset(VQADataset):
-    def __init__(self, data_path, image_transform=None):
+    def __init__(self, data_path, image_transform=None, q_filter=None):
         super(VQADataset, self).__init__()
         
         self.data_path = data_path
         self.image_transform = image_transform
-        self.data = self.load_data('/VQA_RAD Dataset Public.json')
+        self.data = self.load_data('/VQA_RAD Dataset Public.json', q_filter)
         
-    def load_data(self, filename):
+    def load_data(self, filename, q_filter):
         f = open(self.data_path + filename)
         data = json.load(f)
         
         # filter the data to only retain chest images
-        chest_data = [d for d in data if d.get('image_organ') == 'CHEST']
+        data = [d for d in data if d.get('image_organ') == 'CHEST']
         
-        return chest_data
+        if q_filter == 'closed':
+            data = [d for d in data if d.get('answer_type') == 'CLOSED']
+        if q_filter == 'open':
+            data = [d for d in data if d.get('answer_type') == 'OPEN']
+        
+        return data
     
     def get_len(self):
         return len(self.data)
