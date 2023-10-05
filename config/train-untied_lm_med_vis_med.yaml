@@ -1,6 +1,6 @@
 model:
   vision_model: "biovil"
-  language_model: "facebook/opt-125m"
+  language_model: "emrecanacikgoz/opt-125m-MedMCQA-radiology"
   tie_mappers: false
   image_dropout: 0.1
   shared_emb_dim: 512
@@ -21,9 +21,9 @@ loader:
 
 # logger (tensorboard)
 logger:
-  name: "untied_test_5"
+  name: "lm_med_vis_med"
   project: "fromage"
-  version: "untied_test_5"
+  version: "lm_med_vis_med"
   save_dir: "logs/"
 
 dataset:
@@ -31,7 +31,7 @@ dataset:
   resize: 512
   center_crop_size: 480
   tsv_path: "data/MIMIC_JPG_<SPLIT>.tsv"
-  img_path: "/kuacc/users/oince22/hpc_run/physionet.org/files/mimic-cxr-jpg/2.0.0/files/"
+  img_path: "/datasets/mimic/cxr-jpg/physionet.org/files/mimic-cxr-jpg/2.0.0/files/"
 
 optimizer:
   algorithm: 'AdamW'

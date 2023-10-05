@@ -1,8 +1,9 @@
 model:
-  vision_model: "biovil"
-  language_model: "facebook/opt-125m"
-  tie_mappers: true
+  vision_model: "resnet-50-imagenet"
+  language_model: "emrecanacikgoz/opt-125m-MedMCQA-radiology"
+  tie_mappers: false
   image_dropout: 0.1
+  shared_emb_dim: 512
   max_length: 112
   num_img_tokens: 1
 
@@ -20,9 +21,9 @@ loader:
 
 # logger (tensorboard)
 logger:
-  name: "tied_test_2"
+  name: "lm_med_vis_gen"
   project: "fromage"
-  version: "tied_test_2"
+  version: "lm_med_vis_gen"
   save_dir: "logs/"
 
 dataset:
@@ -30,14 +31,14 @@ dataset:
   resize: 512
   center_crop_size: 480
   tsv_path: "data/MIMIC_JPG_<SPLIT>.tsv"
-  img_path: "/kuacc/users/oince22/hpc_run/physionet.org/files/mimic-cxr-jpg/2.0.0/files/"
+  img_path: "/datasets/mimic/cxr-jpg/physionet.org/files/mimic-cxr-jpg/2.0.0/files/"
 
 optimizer:
   algorithm: 'AdamW'
   gradient_clip_val: 1.0
   params:
-    lr: 5.0e-5
-    weight_decay: 5.0e-5
+    lr: 1.0e-4
+    weight_decay: 1.0e-3
 
 # checkpoint
 checkpoint:

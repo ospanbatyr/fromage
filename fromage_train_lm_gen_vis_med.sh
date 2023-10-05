@@ -3,11 +3,13 @@
 #SBATCH --job-name=fromage
 #SBATCH --nodes=1        
 #SBATCH --ntasks-per-node=4
-#SBATCH --partition=mid
+#SBATCH --partition=ai
+#SBATCH --account=ai
+#SBATCH --qos=ai
 #SBATCH --gres=gpu:tesla_t4:1    
-#SBATCH --time=1-0:0:0   
-#SBATCH --output=logs/fromage-%j.out
-#SBATCH --mem=60G
+#SBATCH --time=7-0:0:0   
+#SBATCH --output=logs/fromage_lm_gen_vis_med-%j.out
+#SBATCH --mem=48G
 # Load Anaconda
 echo "======================="
 echo "Loading Anaconda Module..."
@@ -16,6 +18,6 @@ module load cuda/11.7.1
 module load cudnn/8.2.0/cuda-11.X
 
 export TOKENIZERS_PARALLELISM=true
-python train.py --config-name "train-tied.yaml"
+python train.py --config-name "train-untied_lm_gen_vis_med.yaml"
 
 # sbatch fromage_train.sh
