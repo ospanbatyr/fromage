@@ -1,5 +1,12 @@
 ## FROMAGe
 
+### Dataset Info
+
+- Images and text files are in different folder. 
+  - The image super folder is: `/datasets/mimic/cxr-jpg/physionet.org/files/mimic-cxr-jpg/2.0.0/files`
+  - The text super folder is: `/datasets/mimic/cxr/physionet.org/files/mimic-cxr/2.0.0/files`
+
+
 ### Setup
 
 1. Create conda environment: `conda env create -f environment.yml`
