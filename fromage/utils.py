@@ -12,6 +12,8 @@ import string
 import warnings
 import os.path as osp
 from PIL import Image, ImageFile, UnidentifiedImageError
+from shutil import copy
+
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -23,6 +25,16 @@ class RETTokenCallback(pl.Callback):
         for param in pl_module.model.model.input_embeddings.parameters():
             mask = torch.arange(param.grad.shape[0]) != ret_token_idx
             param.grad[mask,:] = 0.0
+
+
+def save_config(CONFIG_DIR, config_name):
+    checkpoints_path = osp.join(log_dir, 'checkpoints', config['logger']['name'])
+    os.makedirs(checkpoints_path, exist_ok=True)
+    
+    config_name = config_name + ".yaml"
+    config_path = osp.join(CONFIG_DIR, config_name)
+    new_config_path = osp.join(checkpoints_path, config_name)
+    copy(config_path, new_config_path)
 
 
 def create_callbacks(config, log_dir):
@@ -42,7 +54,7 @@ def create_callbacks(config, log_dir):
     ckpt_path = last_ckpt if ckpt_path is None else ckpt_path
     if ckpt_path is not None and not osp.isfile(ckpt_path):
         raise Exception('ckpt does not exist at {}'.format(ckpt_path))
-
+ 
     return [RETTokenCallback(), checkpoint_callback], ckpt_path
 
 

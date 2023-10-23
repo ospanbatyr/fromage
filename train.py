@@ -9,7 +9,7 @@ from omegaconf import OmegaConf
 
 from fromage.data import MIMICDataModule, CaptionDataModule
 from fromage.experiment import Experiment
-from fromage.utils import create_callbacks, create_logger
+from fromage.utils import create_callbacks, create_logger, save_config
 
 
 CONFIG_DIR = osp.abspath(osp.join(__file__, "..", "config"))
@@ -18,6 +18,7 @@ CONFIG_DIR = osp.abspath(osp.join(__file__, "..", "config"))
 def main(config):
     config = OmegaConf.to_container(config)
     config = pl.utilities.parsing.AttributeDict(config)
+    save_config(CONFIG_DIR, config_name)
 
     if "seed" in config:
         pl.seed_everything(config["seed"])
