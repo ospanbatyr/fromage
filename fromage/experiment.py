@@ -29,21 +29,27 @@ class Experiment(pl.LightningModule):
     def training_step(self, batch, batch_idx):
         pixels, text = batch
         opt = self.optimizers()
+        opt.zero_grad()
+
         opt_config = self.config['optimizer']
+        grad_acc_step = opt_config['grad_acc_step']
 
         losses = {f"{mode}_loss/train":0 for mode in self.modes}
         for mode in self.modes:
+            opt.zero_grad()
             output, t2i_embs, i2t_embs, full_labels, last_logits = self.forward(pixels, text, mode=mode)
-            loss = output.loss
+            loss = output.loss / grad_acc_step
 
             if mode == "retrieval":
                 logits_per_image, logits_per_text = get_logits(t2i_embs, i2t_embs)
-                loss += retrieval_loss(logits_per_image, logits_per_text)
+                loss += retrieval_loss(logits_per_image, logits_per_text) / grad_acc_step
 
-            opt.zero_grad()
             self.manual_backward(loss)
-            self.clip_gradients(opt, gradient_clip_val=opt_config['gradient_clip_val'], gradient_clip_algorithm="norm")
-            opt.step()
+
+            if (batch_idx + 1) % grad_acc_step == 0:
+                self.clip_gradients(opt, gradient_clip_val=opt_config['gradient_clip_val'], gradient_clip_algorithm="norm")
+                opt.step()
+                opt.zero_grad()
 
             if mode == "caption":
                 log_acc_dict = mode_accuracy(mode=mode, output=output.logits, full_labels=full_labels)
@@ -117,7 +123,16 @@ class Experiment(pl.LightningModule):
         opt_config = self.config['optimizer']
         opt_name = opt_config['algorithm']
         opt_params = opt_config['params']
+        
+        print("Total params:", sum(p.numel() for p in self.model.parameters()))
+
+        # Model is loaded in fp16, all trainable params should be fp16
+        self.model.model.lm.lm_head.weight.data = self.model.model.lm.lm_head.weight.data.to(dtype=torch.float32)
+        self.model.model.lm.model.embed_tokens.weight.data = self.model.model.lm.model.embed_tokens.weight.data.to(dtype=torch.float32)
+
         parameters = filter(lambda p: p.requires_grad, self.model.parameters())
+
+        print("Trainable params:", sum(p.numel() for p in self.model.parameters() if p.requires_grad))
 
         if opt_name == "AdamW":
             optimizer = optim.AdamW(parameters, **opt_params)

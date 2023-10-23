@@ -87,20 +87,25 @@ class FromageModel(nn.Module):
     def _init_language_model(self) -> None:
         # create language model
         model_checkpoint = self.config['language_model']
-        self.lm = AutoModelForCausalLM.from_pretrained(model_checkpoint)
+
+        if "7B" in model_checkpoint:
+            self.lm = AutoModelForCausalLM.from_pretrained(model_checkpoint, torch_dtype=torch.float16)
+        else:
+            self.lm = AutoModelForCausalLM.from_pretrained(model_checkpoint)
+
 
         # freeze the language model
-        for param in self.lm.parameters():
+        for name, param in self.lm.named_parameters():
             param.requires_grad = False
-
-        self.lm.eval()
-
+            
         # resize token embeddings (as we added [RET] token) and 
         # get input embeddings as we will process information on embedding level, not index level 
         self.lm.resize_token_embeddings(len(self.tokenizer))
         self.input_embeddings = self.lm.get_input_embeddings()
 
         self.lm_embed_dim = self.input_embeddings.embedding_dim
+
+        self.lm.eval()
 
 
     def _init_image_encoder(self) -> None:
@@ -328,6 +333,9 @@ class Fromage(nn.Module):
         tokenizer.add_tokens("[RET]")
         ret_id = tokenizer('[RET]', add_special_tokens=False).input_ids
         assert len(ret_id) == 1, "Failed to add [RET] token to tokenizer"
+
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
 
         ret_token_idx = ret_id[0]
         self.tokenizer = tokenizer
