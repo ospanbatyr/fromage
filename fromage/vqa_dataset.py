@@ -5,10 +5,7 @@ import json
 from PIL import Image
 import json
 from pathlib import Path
-try:
-    from .utils import load_image
-except:
-    from utils import load_image
+from .utils import load_image
     
 class VQADataset(data.Dataset):
     def __init__(self, data_path, image_transform=None):
