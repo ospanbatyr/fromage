@@ -26,6 +26,7 @@ from evaluate import load # if throws error, please run the following command "p
 ckpt_path = "../logs/checkpoints/lm_gen_vis_med_mistral_rerun2/last.ckpt"
 config_path = "../config/train-untied_lm_gen_vis_med.yaml"
 dataset_path = "../data/datasets/VQA_RAD"
+MAX_LEN = int(sys.argv[1])
 
 
 # In[3]:
@@ -67,8 +68,8 @@ model.eval()
 
 print("Total params:", sum(p.numel() for p in model.parameters()))
 
-for name, p in model.named_parameters():
-    print(name, p.requires_grad, p.data.dtype)
+# for name, p in model.named_parameters():
+#     print(name, p.requires_grad, p.data.dtype)
 
 parameters = filter(lambda p: p.requires_grad, model.parameters())
 
@@ -76,7 +77,7 @@ print("Trainable params:", sum(p.numel() for p in model.parameters() if p.requir
 
 with torch.inference_mode() as inf_mode, torch.autocast(device_type="cuda") as cast:
     prompts = [img, prompt] 
-    print("Model Answer: ", model.generate_for_images_and_texts(prompts, top_p=0.9, temperature=0.5))
+    print("Model Answer: ", model.generate_for_images_and_texts(prompts, max_len=MAX_LEN)) # top_p=0.9, temperature=0.5
     
 print("Correct Answer: ", answer)
 
@@ -104,32 +105,25 @@ import string
 right_answers = 0
 total_answers = 0
 
-def get_model_response(prompts):
-    model_ans_full = model.generate_for_images_and_texts(prompts, top_p=0.9, temperature=0.5)
+def get_model_response(prompts, max_len):
+    model_ans_full = model.generate_for_images_and_texts(prompts, max_len=max_len) # top_p=0.9, temperature=0.5
     model_ans = model_ans_full.translate(str.maketrans('', '', string.punctuation)) # remove punctuation
-    try: 
-        model_ans = model_ans.split()[0] # take only the first word, sometimes model makes a whole sentence
-        return model_ans
-    except:
-        return model_ans
+    return model_ans
 
-for idx in tqdm(dataset_closed):
+for i, idx in enumerate(tqdm(dataset_closed)):
     img, q, ans = idx 
     with torch.inference_mode() as inf_mode, torch.autocast(device_type="cuda") as cast:
         model.eval()
-        prompts = [idx[0], str("Question: " + idx[1] + " Yes/No answer: ")] 
-        for _ in range(4): # try 5 times to get the correct answer
-            model_ans = get_model_response(prompts)
-            if model_ans.lower() == ans.lower():
-                right_answers += 1
-                break
-            else:
-                pass
+        prompts = [idx[0], str("Question: " + idx[1] + "Answer (Yes or No): ")] 
+        model_ans = get_model_response(prompts, max_len=MAX_LEN)
+        if i % 50 == 1:
+            print(model_ans.lower(), ans.lower())
+        if model_ans.lower() == ans.lower():
+            right_answers += 1
         total_answers += 1        
 
-print(right_answers, '/', total_answers )
+print(right_answers, '/', total_answers)
 print((right_answers/total_answers)*100, '% correct')
-
 
 # ## Open dataset: Bleu score
 
@@ -137,16 +131,6 @@ print((right_answers/total_answers)*100, '% correct')
 
 
 exact_match_metric = load("bleu")
-
-
-# In[ ]:
-
-
-# example
-predictions=['how are you?']
-references=['hello how are you?']
-results = exact_match_metric.compute(predictions=predictions, references=references)
-print(results)
 
 
 # In[ ]:
@@ -160,7 +144,7 @@ for idx in tqdm(dataset_open):
     with torch.inference_mode() as inf_mode, torch.autocast(device_type="cuda") as cast:
         model.eval()
         prompts = [idx[0], str("Question: " + idx[1] + " Answer: ")] 
-        model_ans_full = model.generate_for_images_and_texts(prompts, top_p=0.9, temperature=0.5)    
+        model_ans_full = model.generate_for_images_and_texts(prompts, max_len=MAX_LEN) # top_p=0.9, temperature=0.5    
         current_bleu_scores = []
         for _ in range(4): # try 5 times, get the best score of those 5 times
             try:

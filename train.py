@@ -18,7 +18,6 @@ CONFIG_DIR = osp.abspath(osp.join(__file__, "..", "config"))
 def main(config):
     config = OmegaConf.to_container(config)
     config = pl.utilities.parsing.AttributeDict(config)
-    save_config(CONFIG_DIR, config_name)
 
     if "seed" in config:
         pl.seed_everything(config["seed"])
@@ -36,6 +35,7 @@ def main(config):
     logger_conf = config["logger"]
     if logger is not None and logger_conf["version"] != "debug":
         callbacks, ckpt_path = create_callbacks(config, logger_conf["save_dir"])
+        save_config(config, logger_conf["save_dir"])
 
     experiment = Experiment(config)
     trainer = pl.Trainer(

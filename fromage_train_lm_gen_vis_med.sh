@@ -19,6 +19,6 @@ module load cudnn/8.2.0/cuda-11.X
 
 export TOKENIZERS_PARALLELISM=true
 
-python train.py --config-name "train-untied_lm_gen_vis_med.yaml"
+python train.py --config-name "train-untied_lm_gen_vis_med_instruct.yaml"
 
 # sbatch fromage_train.sh

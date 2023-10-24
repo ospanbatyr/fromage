@@ -13,6 +13,7 @@ import warnings
 import os.path as osp
 from PIL import Image, ImageFile, UnidentifiedImageError
 from shutil import copy
+from omegaconf import OmegaConf
 
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -27,14 +28,15 @@ class RETTokenCallback(pl.Callback):
             param.grad[mask,:] = 0.0
 
 
-def save_config(CONFIG_DIR, config_name):
+def save_config(config, log_dir):
     checkpoints_path = osp.join(log_dir, 'checkpoints', config['logger']['name'])
     os.makedirs(checkpoints_path, exist_ok=True)
     
-    config_name = config_name + ".yaml"
-    config_path = osp.join(CONFIG_DIR, config_name)
-    new_config_path = osp.join(checkpoints_path, config_name)
-    copy(config_path, new_config_path)
+    config_name = "config.yaml"
+    config_path = osp.join(checkpoints_path, config_name)
+    
+    OmegaConf.save(config=dict(config), f=config_path)
+    print(f"Saved the config to {config_path}")
 
 
 def create_callbacks(config, log_dir):
