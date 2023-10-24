@@ -19,6 +19,6 @@ module load cudnn/8.2.0/cuda-11.X
 
 export TOKENIZERS_PARALLELISM=true
 
-python -u VQAEval.py 1
+python -u VQAEval.py
 
 # sbatch fromage_train.sh

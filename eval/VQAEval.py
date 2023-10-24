@@ -10,14 +10,24 @@ from fromage.data import MIMICDataset, cxr_image_transform
 from fromage.utils import preprocess_report
 from evaluate import load # if throws error, please run the following command "pip instal evaluate"
 import string 
+import argparse
+
+# Parse the max generation lengths
+parser = argparse.ArgumentParser(description="Set max lengths for VQA closed and open questions.")
+
+parser.add_argument("--max-len-vqa-closed", type=int, default=1, help="Maximum length for VQA closed questions")
+parser.add_argument("--max-len-vqa-open", type=int, default=16, help="Maximum length for VQA open questions")
+
+args = parser.parse_args()
+
+max_len_vqa_closed = args.max_len_vqa_closed
+max_len_vqa_open = args.max_len_vqa_open
 
 
 # VARIABLES
 ckpt_path = "../logs/checkpoints/lm_gen_vis_med_mistral_rerun2/last.ckpt"
 config_path = "../config/train-untied_lm_gen_vis_med.yaml"
 dataset_path = "../data/datasets/VQA_RAD"
-MAX_LEN_VQA_CLOSED = int(sys.argv[1])
-MAX_LEN_VQA_OPEN = int(sys.argv[2])
 bleu_metric = load("bleu")
 
 # LOAD MODEL
@@ -32,6 +42,7 @@ model.device = device
 
 model.eval()
 
+transform = cxr_image_transform(resize=512, center_crop_size=480, train=False) 
 dataset_closed = VQA_RADDataset(dataset_path, transform, 'closed')
 dataset_open = VQA_RADDataset(dataset_path, transform, 'open')
 
@@ -46,7 +57,7 @@ for i, idx in enumerate(tqdm(dataset_closed)):
     with torch.inference_mode() as inf_mode, torch.autocast(device_type="cuda") as cast:
         model.eval()
         prompts = [idx[0], str("Question: " + idx[1] + "Answer (Yes or No): ")] 
-        model_ans = model.generate_for_images_and_texts(prompts, max_len=MAX_LEN_VQA_CLOSED) # top_p=0.9, temperature=0.5
+        model_ans = model.generate_for_images_and_texts(prompts, max_len=max_len_vqa_closed) # top_p=0.9, temperature=0.5
         model_ans = model_ans.translate(str.maketrans('', '', string.punctuation)) # remove punctuation
         
         if i % 50 == 1:
@@ -67,7 +78,7 @@ for idx in tqdm(dataset_open):
     with torch.inference_mode() as inf_mode, torch.autocast(device_type="cuda") as cast:
         model.eval()
         prompts = [idx[0], str("Question: " + idx[1] + " Answer: ")] 
-        model_ans = model.generate_for_images_and_texts(prompts, max_len=MAX_LEN_VQA_OPEN) # top_p=0.9, temperature=0.5    
+        model_ans = model.generate_for_images_and_texts(prompts, max_len=max_len_vqa_open) # top_p=0.9, temperature=0.5    
         max_bleu_score = 0
         for _ in range(5): # try 5 times, get the best score of those 5 times
             try:
