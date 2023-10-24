@@ -229,7 +229,8 @@ class FromageModel(nn.Module):
 
 
     def perplexity(self, prompt_embeddings, expected_tok_ids):
-        bsz, seq_len, _ = prompt_embeddings.shape
+        bsz, seq_len, dim = prompt_embeddings.shape
+        print(f"bsz: {bsz}, seq_len: {seq_len}, dim: {dim}")
         ppl = 0
         embeddings = prompt_embeddings
 
@@ -237,12 +238,16 @@ class FromageModel(nn.Module):
             for tok_id in expected_tok_ids:
                 output = self.lm(inputs_embeds=embeddings, use_cache=False, output_hidden_states=True)
                 logits = output.logits[:,-1,:]
+                print(f"logits.shape: {logits.shape}")
                 probs = torch.softmax(logits, dim=-1)
+                print(f"probs.shape: {probs.shape}")
+
                 cur_tok_prob = probs[:, tok_id]
+                print(f"cur_tok_prob.shape: {cur_tok_prob.shape}")
+
                 ppl += torch.log(cur_tok_prob)
 
                 tok_id = tok_id.unsqueeze(0)
-                print(f"tok_id.shape: {tok_id.shape}")
                 next_embedding = self.input_embeddings(tok_id)
                 embeddings = torch.cat([embeddings, next_embedding], dim=1)
 
@@ -291,9 +296,7 @@ class FromageModel(nn.Module):
                     token_weights = logits.exp()
                     next_token = torch.multinomial(token_weights, 1)
 
-                print(f"next_token.shape: {next_token.shape}")
                 next_token = next_token.long().to(self.logit_scale.device)
-                print(f"next_token.shape: {next_token.shape}")
 
                 if out is not None:
                     out = torch.cat([out, next_token], dim=1)
@@ -415,9 +418,13 @@ class Fromage(nn.Module):
             expected_tok_ids = expected_tok_ids[:, 1:] # remove bos
 
             curr_ppl = self.model.perplexity(input_embs, expected_tok_ids)
+            print(f"curr_ppl: {curr_ppl}")
+
             if curr_ppl < min_ppl:
                 min_ppl = curr_ppl
                 min_ppl_idx = cls_idx
+
+            print(f"min_ppl: {curr_ppl}")
 
         return min_ppl_idx
 

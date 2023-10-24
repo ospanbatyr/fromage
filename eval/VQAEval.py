@@ -52,12 +52,13 @@ print("VQA-RAD Open Length: ", dataset_open.get_len())
 right_answers = 0
 total_answers = 0
 
+vqa_rad_closed_cls = ["yes", "no"]
 for i, idx in enumerate(tqdm(dataset_closed)):
     img, q, ans = idx 
     with torch.inference_mode() as inf_mode, torch.autocast(device_type="cuda") as cast:
         model.eval()
         prompts = [idx[0], str("Question: " + idx[1] + " Answer the question with only yes or no: ")]
-        model_ans = model.generate_for_images_and_texts(prompts, max_len=max_len_vqa_closed) # top_p=0.9, temperature=0.5
+        model_ans = vqa_rad_closed_cls[model.classification_for_eval(prompts, vqa_rad_closed_cls)] # top_p=0.9, temperature=0.5
         model_ans = model_ans.translate(str.maketrans('', '', string.punctuation)) # remove punctuation
         
         print(model_ans, ans)
@@ -83,7 +84,6 @@ for idx in tqdm(dataset_open):
                 model_ans = model.generate_for_images_and_texts(prompts, max_len=max_len_vqa_open, top_p=0.9, temperature=0.5)    
                 bleu_score = bleu_metric.compute(predictions=[model_ans], references=[ans]).get('bleu')
                 max_bleu_score = max(max_bleu_score, bleu_score)
-                print(model_ans, ans)
             except:
                 pass
 
