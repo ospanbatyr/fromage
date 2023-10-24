@@ -228,6 +228,28 @@ class FromageModel(nn.Module):
         return output, t2i_embs, i2t_embs, full_labels, last_logits
 
 
+    def perplexity(self, prompt_embeddings, expected_tok_ids):
+        bsz, seq_len, _ = prompt_embeddings.shape
+        ppl = 0
+        embeddings = prompt_embeddings
+
+        with torch.no_grad():
+            for tok_id in expected_tok_ids:
+                output = self.lm(inputs_embeds=embeddings, use_cache=False, output_hidden_states=True)
+                logits = output.logits[:,-1,:]
+                probs = torch.softmax(logits, dim=-1)
+                cur_tok_prob = probs[:, tok_id]
+                ppl += torch.log(cur_tok_prob)
+
+                tok_id = tok_id.unsqueeze(0)
+                print(f"tok_id.shape: {tok_id.shape}")
+                next_embedding = self.input_embeddings(tok_id)
+                embeddings = torch.cat([embeddings, next_embedding], dim=1)
+
+        ppl = torch.exp(-1 / len(expected_tok_ids) * ppl)
+        return ppl
+
+
     def generate(self, embeddings, max_len, temperature=0.0, top_p=1.0, filter_value=float("-inf")):
         bsz, seq_len, _ = embeddings.shape
         out = None
@@ -269,7 +291,10 @@ class FromageModel(nn.Module):
                     token_weights = logits.exp()
                     next_token = torch.multinomial(token_weights, 1)
 
+                print(f"next_token.shape: {next_token.shape}")
                 next_token = next_token.long().to(self.logit_scale.device)
+                print(f"next_token.shape: {next_token.shape}")
+
                 if out is not None:
                     out = torch.cat([out, next_token], dim=1)
                 else:
@@ -350,7 +375,57 @@ class Fromage(nn.Module):
         return self.model(pixel_values=images, text_inputs=tgt_tokens, mode=mode)
 
 
-    def generate_for_images_and_texts(self, prompts: List, max_len=32, top_p=1.0, temperature=0.0):
+    def classification_for_eval(self, prompts: List, classes: List):
+        input_embs = []
+        input_ids = []
+
+        add_bos = True
+        for i, p in enumerate(prompts):
+            if isinstance(p, Path):
+                img = load_image(p)
+                pixel_values = self.img_transform(img)
+                pixel_values = pixel_values[None, ...]
+                vis_emb = self.model.encode_images(pixel_values, mode="caption")
+                vis_emb = vis_emb.unsqueeze(0).unsqueeze(0)
+                input_embs.append(vis_emb)
+            elif isinstance(p, torch.Tensor):
+                pixel_values = p[None, ...]
+                vis_emb = self.model.encode_images(pixel_values, mode="caption")
+                vis_emb = vis_emb.unsqueeze(0).unsqueeze(0)
+                input_embs.append(vis_emb)
+            elif type(p) == str:
+                tokens = self.model.tokenizer(p, add_special_tokens=True, return_tensors="pt")
+                text_ids = tokens.input_ids.to(self.device)
+                if not add_bos:
+                    text_ids = text_ids[:, 1:]
+                else:
+                    add_bos = False
+
+                text_embs = self.model.input_embeddings(text_ids)
+                input_embs.append(text_embs)
+                input_ids.append(text_ids)
+
+        input_embs = torch.cat(input_embs, dim=1)
+        input_ids = torch.cat(input_ids, dim=1)
+
+        min_ppl, min_ppl_idx = float("inf"), -1
+        for cls_idx, cls_name in enumerate(classes):
+            expected_tokens = self.model.tokenizer(cls_name, add_special_tokens=True, return_tensors="pt")
+            expected_tok_ids = expected_tokens.input_ids.to(self.device)
+            expected_tok_ids = expected_tok_ids[:, 1:] # remove bos
+
+            curr_ppl = self.model.perplexity(input_embs, expected_tok_ids)
+            if curr_ppl < min_ppl:
+                min_ppl = curr_ppl
+                min_ppl_idx = cls_idx
+
+        return min_ppl_idx
+
+
+        
+
+
+    def generate_for_images_and_texts(self, prompts: List, max_len=32, top_p=1.0, temperature=0.0, ppl_mode=False):
         input_embs = []
         input_ids = []
 
