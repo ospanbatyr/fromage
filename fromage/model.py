@@ -230,7 +230,6 @@ class FromageModel(nn.Module):
 
     def perplexity(self, prompt_embeddings, expected_tok_ids):
         bsz, seq_len, dim = prompt_embeddings.shape
-        print(f"bsz: {bsz}, seq_len: {seq_len}, dim: {dim}")
         ppl = 0
         embeddings = prompt_embeddings
 
@@ -238,21 +237,17 @@ class FromageModel(nn.Module):
             for tok_id in expected_tok_ids:
                 output = self.lm(inputs_embeds=embeddings, use_cache=False, output_hidden_states=True)
                 logits = output.logits[:,-1,:]
-                print(f"logits.shape: {logits.shape}")
                 probs = torch.softmax(logits, dim=-1)
-                print(f"probs.shape: {probs.shape}")
 
                 cur_tok_prob = probs[:, tok_id]
-                print(f"cur_tok_prob.shape: {cur_tok_prob.shape}")
 
                 ppl += torch.log(cur_tok_prob)
-
                 tok_id = tok_id.unsqueeze(0)
                 next_embedding = self.input_embeddings(tok_id)
                 embeddings = torch.cat([embeddings, next_embedding], dim=1)
 
         ppl = torch.exp(-1 / len(expected_tok_ids) * ppl)
-        return ppl
+        return ppl.item()
 
 
     def generate(self, embeddings, max_len, temperature=0.0, top_p=1.0, filter_value=float("-inf")):
@@ -413,26 +408,19 @@ class Fromage(nn.Module):
 
         min_ppl, min_ppl_idx = float("inf"), -1
         for cls_idx, cls_name in enumerate(classes):
-            expected_tokens = self.model.tokenizer(cls_name, add_special_tokens=True, return_tensors="pt")
+            expected_tokens = self.model.tokenizer(cls_name, add_special_tokens=False, return_tensors="pt")
             expected_tok_ids = expected_tokens.input_ids.to(self.device)
-            expected_tok_ids = expected_tok_ids[:, 1:] # remove bos
 
             curr_ppl = self.model.perplexity(input_embs, expected_tok_ids)
-            print(f"curr_ppl: {curr_ppl}")
 
             if curr_ppl < min_ppl:
                 min_ppl = curr_ppl
                 min_ppl_idx = cls_idx
 
-            print(f"min_ppl: {curr_ppl}")
-
         return min_ppl_idx
 
 
-        
-
-
-    def generate_for_images_and_texts(self, prompts: List, max_len=32, top_p=1.0, temperature=0.0, ppl_mode=False):
+    def generate_for_images_and_texts(self, prompts: List, max_len=32, top_p=1.0, temperature=0.0, add_special_tokens=True):
         input_embs = []
         input_ids = []
 
@@ -452,7 +440,7 @@ class Fromage(nn.Module):
                 vis_emb = vis_emb.unsqueeze(0).unsqueeze(0)
                 input_embs.append(vis_emb)
             elif type(p) == str:
-                tokens = self.model.tokenizer(p, add_special_tokens=True, return_tensors="pt")
+                tokens = self.model.tokenizer(p, add_special_tokens=add_special_tokens, return_tensors="pt")
                 text_ids = tokens.input_ids.to(self.device)
                 if not add_bos:
                     text_ids = text_ids[:, 1:]
@@ -470,5 +458,5 @@ class Fromage(nn.Module):
 
         generated_ids, generated_embeddings, _ = self.model.generate(input_embs, max_len, temperature=temperature, top_p=top_p)
 
-        return_outputs = self.model.tokenizer.batch_decode(generated_ids, skip_special_tokens=False)[0]        
+        return_outputs = self.model.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]        
         return return_outputs

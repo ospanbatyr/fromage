@@ -16,7 +16,7 @@ import argparse
 parser = argparse.ArgumentParser(description="Set max lengths for VQA closed and open questions.")
 
 parser.add_argument("--max-len-vqa-closed", type=int, default=1, help="Maximum length for VQA closed questions")
-parser.add_argument("--max-len-vqa-open", type=int, default=16, help="Maximum length for VQA open questions")
+parser.add_argument("--max-len-vqa-open", type=int, default=10, help="Maximum length for VQA open questions")
 
 args = parser.parse_args()
 
@@ -25,8 +25,8 @@ max_len_vqa_open = args.max_len_vqa_open
 
 
 # VARIABLES
-ckpt_path = "../logs/checkpoints/lm_gen_vis_med_mistral_rerun2/last.ckpt"
-config_path = "../config/train-untied_lm_gen_vis_med.yaml"
+ckpt_path = "../logs/checkpoints/lm_gen_vis_med_mistral_instruct/last.ckpt"
+config_path = "../logs/checkpoints/lm_gen_vis_med_mistral_instruct/config.yaml"
 dataset_path = "../data/datasets/VQA_RAD"
 bleu_metric = load("bleu")
 
@@ -59,7 +59,6 @@ for i, idx in enumerate(tqdm(dataset_closed)):
         model.eval()
         prompts = [idx[0], str("Question: " + idx[1] + " Answer the question with only yes or no: ")]
         model_ans = vqa_rad_closed_cls[model.classification_for_eval(prompts, vqa_rad_closed_cls)] # top_p=0.9, temperature=0.5
-        model_ans = model_ans.translate(str.maketrans('', '', string.punctuation)) # remove punctuation
         
         print(model_ans, ans)
         if model_ans.lower() == ans.lower():
@@ -77,15 +76,21 @@ for idx in tqdm(dataset_open):
     img, q, ans = idx 
     with torch.inference_mode() as inf_mode, torch.autocast(device_type="cuda") as cast:
         model.eval()
-        prompts = [idx[0], str("Question: " + idx[1] + " Answer the question using a single word or phrase: ")] 
+        prompts = [
+            """<s>[INST] You are an AI assistant specialized in chest X-ray radiology question answering using a single word or a few words. Use only a single word or a few words to answer the questions. [/INST] Understood.</s>[INST] """, idx[0], "Question: " + idx[1] + " Answer using a single word or a few words: [/INST]"
+        ] 
         max_bleu_score = 0
         for _ in range(5): # try 5 times, get the best score of those 5 times
             try:
-                model_ans = model.generate_for_images_and_texts(prompts, max_len=max_len_vqa_open, top_p=0.9, temperature=0.5)    
-                bleu_score = bleu_metric.compute(predictions=[model_ans], references=[ans]).get('bleu')
+                model_ans = model.generate_for_images_and_texts(prompts, max_len=max_len_vqa_open, top_p=0.9, temperature=0.5, add_special_tokens=False)
+                model_ans = model_ans.translate(str.maketrans('', '', string.punctuation)) # remove punctuation
+                bleu_score = bleu_metric.compute(predictions=[model_ans.lower()], references=[[ans.lower()]]).get('bleu')
                 max_bleu_score = max(max_bleu_score, bleu_score)
+                print(model_ans, ans, bleu_score)
             except:
                 pass
+
+        total_bleu_score += max_bleu_score
 
     total += 1
 
