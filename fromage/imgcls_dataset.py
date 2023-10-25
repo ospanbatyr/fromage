@@ -7,8 +7,9 @@ import json
 import pandas as pd
 from pathlib import Path
 from .utils import load_image
+import os.path as osp
     
-class imgclsDataset(data.Dataset):
+class ImgClsDataset(data.Dataset):
     def __init__(self, data_path, image_transform=None):
         self.data_path = data_path
         self.image_transform = image_transform # can be implemented later
@@ -17,60 +18,48 @@ class imgclsDataset(data.Dataset):
         return self.get_len()
 
     def __getitem__(self, index):
-        
         image = self.get_image(index, self.image_transform)
         if self.image_transform != None:
             image = self.image_transform(image)
+            
         img_class = self.get_class(index)
-
         return image, img_class
     
     
-class RSNAPneumoniaDataset(imgclsDataset):
+class RSNAPneumoniaDataset(ImgClsDataset):
     def __init__(self, data_path, image_transform=None):
-        super(imgclsDataset, self).__init__()
+        super(ImgClsDataset, self).__init__()
         
         self.data_path = data_path
         self.image_transform = image_transform
-        self.data = self.load_data('/stage_2_train_labels_short.csv')
-        
-    def load_data(self, filename):
-        data = pd.read_csv(self.data_path + filename)
-        # shorten the csv
-        return data
-    
+        self.data = pd.read_csv(osp.join(self.data_path, "stage_2_train_labels_short.csv"))
+
     def get_len(self):
         return len(self.data)
     
     def get_image(self, index, image_transform=None):
-#         print(self.data['patientId'])
-#         print('index: ', index)
-        
-        image_path = Path(self.data_path + '/stage_2_train_images/' + self.data['patientId'].iloc[index] + '.dcm')
+        image_path = Path(osp.join(self.data_path, 'stage_2_train_images', self.data['patientId'].iloc[index]) + '.dcm')
         return load_image(image_path)
     
     def get_class(self, index):
         return self.data['Target'].iloc[index]
     
 
-class COVIDDataset(imgclsDataset):
+class COVIDDataset(ImgClsDataset):
     def __init__(self, data_path, image_transform=None):
-        super(imgclsDataset, self).__init__()
+        super(ImgClsDataset, self).__init__()
         
         self.data_path = data_path
         self.image_transform = image_transform
-        self.data = self.load_data('/COVIDshort.json')
         
-    def load_data(self, filename):
-        f = open(self.data_path + filename)
-        data = json.load(f)
-        return data
+        with open(osp.join(self.data_path, "COVIDshort.json")) as f:
+            self.data = json.load(f)
     
     def get_len(self):
         return len(self.data)
     
     def get_image(self, index, image_transform=None):
-        image_path = Path(self.data_path + "/" + self.data[index].get('image_path'))
+        image_path = Path(osp.join(self.data_path, self.data[index].get('image_path')))
         return load_image(image_path)
     
     def get_class(self, index):
