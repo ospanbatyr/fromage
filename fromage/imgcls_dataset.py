@@ -43,6 +43,14 @@ class RSNAPneumoniaDataset(ImgClsDataset):
     
     def get_class(self, index):
         return self.data['Target'].iloc[index]
+
+    def __getitem__(self, index):
+        image = self.get_image(index, self.image_transform)
+        if self.image_transform != None:
+            image = self.image_transform(image)
+            
+        img_class = "yes" if self.get_class(index) == 1 else "no"
+        return image, img_class
     
 
 class COVIDDataset(ImgClsDataset):
@@ -64,3 +72,12 @@ class COVIDDataset(ImgClsDataset):
     
     def get_class(self, index):
         return self.data[index].get('class')
+
+    def __getitem__(self, index):
+        image = self.get_image(index, self.image_transform)
+        if self.image_transform != None:
+            image = self.image_transform(image)
+            
+        img_class = self.get_class(index)
+        img_class = "Pneumonia" if img_class == "Non-COVID" else img_class
+        return image, img_class

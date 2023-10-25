@@ -239,11 +239,12 @@ class FromageModel(nn.Module):
                 logits = output.logits[:,-1,:]
                 probs = torch.softmax(logits, dim=-1)
 
+                tok_id = tok_id.unsqueeze(0)
                 cur_tok_prob = probs[:, tok_id]
 
                 ppl += torch.log(cur_tok_prob)
-                tok_id = tok_id.unsqueeze(0)
-                next_embedding = self.input_embeddings(tok_id)
+                next_embedding = self.input_embeddings(tok_id).unsqueeze(0)
+
                 embeddings = torch.cat([embeddings, next_embedding], dim=1)
 
         ppl = torch.exp(-1 / len(expected_tok_ids) * ppl)
@@ -409,7 +410,7 @@ class Fromage(nn.Module):
         min_ppl, min_ppl_idx = float("inf"), -1
         for cls_idx, cls_name in enumerate(classes):
             expected_tokens = self.model.tokenizer(cls_name, add_special_tokens=False, return_tensors="pt")
-            expected_tok_ids = expected_tokens.input_ids.to(self.device)
+            expected_tok_ids = expected_tokens.input_ids[0].to(self.device)
 
             curr_ppl = self.model.perplexity(input_embs, expected_tok_ids)
 
@@ -417,7 +418,7 @@ class Fromage(nn.Module):
                 min_ppl = curr_ppl
                 min_ppl_idx = cls_idx
 
-        return min_ppl_idx
+        return classes[min_ppl_idx]
 
 
     def generate_for_images_and_texts(self, prompts: List, max_len=32, top_p=1.0, temperature=0.0, add_special_tokens=True):

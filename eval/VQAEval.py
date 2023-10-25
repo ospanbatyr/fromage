@@ -1,34 +1,52 @@
 import sys
 import torch
 import yaml
+import string 
+import argparse
 from tqdm import tqdm
+import os.path as osp
 
 from fromage.vqa_dataset import VQA_RADDataset
+from fromage.imgcls_dataset import RSNAPneumoniaDataset, COVIDDataset
 from fromage.model import Fromage, FromageModel
 from fromage.experiment import Experiment
 from fromage.data import MIMICDataset, cxr_image_transform
 from fromage.utils import preprocess_report
 from evaluate import load # if throws error, please run the following command "pip instal evaluate"
-import string 
-import argparse
+
 
 # Parse the max generation lengths
 parser = argparse.ArgumentParser(description="Set max lengths for VQA closed and open questions.")
 
-parser.add_argument("--max-len-vqa-closed", type=int, default=1, help="Maximum length for VQA closed questions")
 parser.add_argument("--max-len-vqa-open", type=int, default=10, help="Maximum length for VQA open questions")
+parser.add_argument("--ckpt-dir", type=str, default="../logs/checkpoints", help="Default folder for checkpoints")
+parser.add_argument("--dataset-dir", type=str, default="../data/datasets", help="Default folder for dataset")
+parser.add_argument("--ckpt-name", type=str, required=True, help="Checkpoint name")
 
 args = parser.parse_args()
-
-max_len_vqa_closed = args.max_len_vqa_closed
 max_len_vqa_open = args.max_len_vqa_open
-
+ckpt_dir = args.ckpt_dir
+dataset_dir = args.dataset_dir
+ckpt_name = args.ckpt_name
 
 # VARIABLES
-ckpt_path = "../logs/checkpoints/lm_gen_vis_med_mistral_instruct/last.ckpt"
-config_path = "../logs/checkpoints/lm_gen_vis_med_mistral_instruct/config.yaml"
-dataset_path = "../data/datasets/VQA_RAD"
+ckpt_path = osp.join(ckpt_dir, ckpt_name, "last.ckpt")
+config_path = osp.join(ckpt_dir, ckpt_name, "config.yaml")
+
+vqa_dataset_path = osp.join(dataset_dir, "VQA_RAD")
+rsna_dataset_path = osp.join(dataset_dir, "RSNA")
+covid_dataset_path = osp.join(dataset_dir, "COVID_QU_EX")
 bleu_metric = load("bleu")
+
+
+# DATASETS
+transform = cxr_image_transform(resize=512, center_crop_size=480, train=False) 
+
+closed_VQARAD_dataset = VQA_RADDataset(vqa_dataset_path, transform, 'closed')
+open_VQARAD_dataset = VQA_RADDataset(vqa_dataset_path, transform, 'open')
+
+RSNAdataset = RSNAPneumoniaDataset(rsna_dataset_path, transform)
+COVIDdataset = COVIDDataset(covid_dataset_path, transform)
 
 # LOAD MODEL
 with open(config_path) as file:
@@ -42,37 +60,30 @@ model.device = device
 
 model.eval()
 
-transform = cxr_image_transform(resize=512, center_crop_size=480, train=False) 
-dataset_closed = VQA_RADDataset(dataset_path, transform, 'closed')
-dataset_open = VQA_RADDataset(dataset_path, transform, 'open')
-
-print("VQA-RAD Closed Length: ", dataset_closed.get_len())
-print("VQA-RAD Open Length: ", dataset_open.get_len())
-
+# VQA-RAD EVALUATION
 right_answers = 0
 total_answers = 0
 
 vqa_rad_closed_cls = ["yes", "no"]
-for i, idx in enumerate(tqdm(dataset_closed)):
+for i, idx in enumerate(tqdm(closed_VQARAD_dataset)):
     img, q, ans = idx 
     with torch.inference_mode() as inf_mode, torch.autocast(device_type="cuda") as cast:
         model.eval()
         prompts = [idx[0], str("Question: " + idx[1] + " Answer the question with only yes or no: ")]
-        model_ans = vqa_rad_closed_cls[model.classification_for_eval(prompts, vqa_rad_closed_cls)] # top_p=0.9, temperature=0.5
-        
-        print(model_ans, ans)
+        model_ans = model.classification_for_eval(prompts, vqa_rad_closed_cls) # top_p=0.9, temperature=0.5
+
         if model_ans.lower() == ans.lower():
             right_answers += 1
         total_answers += 1        
 
 print("VQA-RAD Evaluation")
-print("="*30)
+print("="*60)
 print(f"Closed (Yes/No) Question Accuracy: {right_answers} / {total_answers} = {(right_answers / total_answers)*100}")
 
 total_bleu_score = 0
 total = 0
 
-for idx in tqdm(dataset_open):
+for idx in tqdm(open_VQARAD_dataset):
     img, q, ans = idx 
     with torch.inference_mode() as inf_mode, torch.autocast(device_type="cuda") as cast:
         model.eval()
@@ -86,7 +97,6 @@ for idx in tqdm(dataset_open):
                 model_ans = model_ans.translate(str.maketrans('', '', string.punctuation)) # remove punctuation
                 bleu_score = bleu_metric.compute(predictions=[model_ans.lower()], references=[[ans.lower()]]).get('bleu')
                 max_bleu_score = max(max_bleu_score, bleu_score)
-                print(model_ans, ans, bleu_score)
             except:
                 pass
 
@@ -95,3 +105,49 @@ for idx in tqdm(dataset_open):
     total += 1
 
 print(f"Open Question BLEU Score : {total_bleu_score} / {total} = {(total_bleu_score / total) * 100}")
+print("VQA-RAD Evaluation")
+print("="*60)
+
+# CLASSIFICATION
+print("\nCLASSIFICATION Evaluation")
+print("="*60)
+
+# RSNA EVALUATION
+right_answers = 0
+total_answers = 0
+
+rsna_classes = ["yes", "no"]
+
+for idx in tqdm(RSNAdataset):
+    img, ans = idx 
+    with torch.inference_mode():
+        model.eval()
+        prompts = [idx[0], "Question: Is pneumonia present in this chest x-ray image? Answer (yes or no): "] 
+        model_ans = model.classification_for_eval(prompts, rsna_classes) # top_p=0.9, temperature=0.5
+        
+        if model_ans.lower() == ans.lower():
+            right_answers += 1
+
+        total_answers += 1  
+
+print(f"RSNA Classification Accuracy: {right_answers} / {total_answers} = {(right_answers / total_answers)*100}")
+
+# COVID EVALUATION
+right_answers = 0
+total_answers = 0
+
+covid_classes = ["normal", "covid", "pneumonia"]
+
+for idx in tqdm(COVIDdataset):
+    img, ans = idx 
+    with torch.inference_mode():
+        model.eval()
+        prompts = [idx[0], "Question: Classify the chest x-ray into normal, COVID or pneumonia. Answer: "] 
+        model_ans = model.classification_for_eval(prompts, covid_classes) # top_p=0.9, temperature=0.5
+        
+        if model_ans.lower() == ans.lower():
+            right_answers += 1
+
+        total_answers += 1    
+
+print(f"COVID Classification Accuracy: {right_answers} / {total_answers} = {(right_answers / total_answers)*100}")
