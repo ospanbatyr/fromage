@@ -5,8 +5,9 @@ lightning_logs/
 data/*
 bin/*
 .hydra/
-notebooks/.ipynb_checkpoints/
+*/.ipynb_checkpoints/
 fromage/__pycache__/
 .ipynb_checkpoints/
 fromage.egg-info/
 eval/eval_logs/
+eval/__pycache__/

@@ -243,10 +243,11 @@ class FromageModel(nn.Module):
                 cur_tok_prob = probs[:, tok_id]
 
                 ppl += torch.log(cur_tok_prob)
+                print(f"cur_tok_prob: {cur_tok_prob}, ppl: {ppl}")        
                 next_embedding = self.input_embeddings(tok_id).unsqueeze(0)
-
                 embeddings = torch.cat([embeddings, next_embedding], dim=1)
 
+        print(f"len(expected_tok_ids): {len(expected_tok_ids)}")
         ppl = torch.exp(-1 / len(expected_tok_ids) * ppl)
         return ppl.item()
 
@@ -374,7 +375,7 @@ class Fromage(nn.Module):
         return self.model(pixel_values=images, text_inputs=tgt_tokens, mode=mode)
 
 
-    def classification_for_eval(self, prompts: List, classes: List):
+    def classification_for_eval(self, prompts: List, classes: List, add_special_tokens=True):
         input_embs = []
         input_ids = []
 
@@ -393,7 +394,7 @@ class Fromage(nn.Module):
                 vis_emb = vis_emb.unsqueeze(0).unsqueeze(0)
                 input_embs.append(vis_emb)
             elif type(p) == str:
-                tokens = self.model.tokenizer(p, add_special_tokens=True, return_tensors="pt")
+                tokens = self.model.tokenizer(p, add_special_tokens=add_special_tokens, return_tensors="pt")
                 text_ids = tokens.input_ids.to(self.device)
                 if not add_bos:
                     text_ids = text_ids[:, 1:]
@@ -417,6 +418,8 @@ class Fromage(nn.Module):
             if curr_ppl < min_ppl:
                 min_ppl = curr_ppl
                 min_ppl_idx = cls_idx
+
+            print(f"cur_ppl: {curr_ppl}, min_ppl: {min_ppl}, class: {cls_name}")
 
         return classes[min_ppl_idx]
 
