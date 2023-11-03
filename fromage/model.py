@@ -243,12 +243,12 @@ class FromageModel(nn.Module):
                 cur_tok_prob = probs[:, tok_id]
 
                 ppl += torch.log(cur_tok_prob)
-                print(f"cur_tok_prob: {cur_tok_prob}, ppl: {ppl}")        
+                #print(f"cur_tok_prob: {cur_tok_prob}, ppl: {ppl}")        
                 next_embedding = self.input_embeddings(tok_id).unsqueeze(0)
                 embeddings = torch.cat([embeddings, next_embedding], dim=1)
 
-        print(f"len(expected_tok_ids): {len(expected_tok_ids)}")
-        ppl = torch.exp(-1 / len(expected_tok_ids) * ppl)
+        #print(f"len(expected_tok_ids): {len(expected_tok_ids)}")
+        ppl = torch.exp(-ppl) # 1 / len(expected_tok_ids) *
         return ppl.item()
 
 
@@ -419,7 +419,7 @@ class Fromage(nn.Module):
                 min_ppl = curr_ppl
                 min_ppl_idx = cls_idx
 
-            print(f"cur_ppl: {curr_ppl}, min_ppl: {min_ppl}, class: {cls_name}")
+            #print(f"cur_ppl: {curr_ppl}, min_ppl: {min_ppl}, class: {cls_name}")
 
         return classes[min_ppl_idx]
 

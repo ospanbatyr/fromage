@@ -77,7 +77,12 @@ class COVIDDataset(ImgClsDataset):
         image = self.get_image(index, self.image_transform)
         if self.image_transform != None:
             image = self.image_transform(image)
-            
-        img_class = "pneumonia" if self.get_class(index) == "non-COVID" else self.get_class(index)
-        img_class = "healthy" if self.get_class(index) == "normal" else self.get_class(index)
+        
+        if self.get_class(index) == "Normal":
+            img_class = "A"
+        elif self.get_class(index) == "Non-COVID":
+            img_class = "B"
+        elif self.get_class(index) == "COVID-19":
+            img_class = "C"
+
         return image, img_class

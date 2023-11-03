@@ -8,7 +8,7 @@
 #SBATCH --qos=ai
 #SBATCH --gres=gpu:rtx_a6000:1
 #SBATCH --time=1-0:0:0   
-#SBATCH --output=eval_logs/test_eval-%j.out
+#SBATCH --output=eval_logs/lm_gen_vis_med_mistral_instruct-%j.out
 #SBATCH --mem=48G
 # Load Anaconda
 echo "======================="
@@ -18,7 +18,6 @@ module load cuda/11.8.0
 module load cudnn/8.2.0/cuda-11.X
 
 export TOKENIZERS_PARALLELISM=true
-
-python -u eval_models.py --ckpt-name "lm_med_vis_med"
+python -u eval_models.py --ckpt-name "lm_gen_vis_med_mistral_instruct" # lm_med_vis_med
 
 # sbatch fromage_train.sh

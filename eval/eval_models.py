@@ -83,9 +83,12 @@ def VQARAD_evaluation():
         img, q, ans = idx 
         with torch.inference_mode() as inf_mode, torch.autocast(device_type="cuda") as cast:
             model.eval()
+            """<s>[INST] You are an AI assistant specialized in chest X-ray radiology question answering using a single word or a few words. Use only a single word or a few words to answer the questions. [/INST] Understood.</s>[INST] """
+
             prompts = [
-                """<s>[INST] You are an AI assistant specialized in chest X-ray radiology question answering using a single word or a few words. Use only a single word or a few words to answer the questions. [/INST] Understood.</s>[INST] """, idx[0], "Question: " + idx[1] + " Answer using a single word or a few words: [/INST]"
-            ] 
+                idx[0], "Question: " + idx[1] + " Answer using a single word or a few words: "
+            ]
+
             max_bleu_score = 0
             for _ in range(5): # try 5 times, get the best score of those 5 times
                 try:
@@ -132,24 +135,32 @@ def COVID_evaluation():
     right_answers = 0
     total_answers = 0
 
-    covid_classes = ["covid-19", "healthy", "pneumonia"]
+    covid_classes = ["A", "B", "C"]
 
     for idx in tqdm(COVIDdataset):
         img, ans = idx 
         with torch.inference_mode() as inf_mode, torch.autocast(device_type="cuda") as cast:
             model.eval()
+            """<s>[INST] You are an AI assistant specialized in chest X-ray radiology image classification. Here are the image classes and teir definitions:
+            normal: The absence of diseases and infirmity, indicating the structure is normal.
+            pneumonia: An inflammatory condition of the lung primarily small air sacs known as alveoli. Pneumonia may present with opacities.
+            covid-19: A contagious disease caused by a virus. Ground-glass opacities, consolidation, thickening, pleural effusions commonly appear in infection.
+            Choose the option letter that describes the image best.
+            [/INST] Understood.</s>[INST] """
+
             prompts = [
-                """<s>[INST] You are an AI assistant specialized in chest X-ray radiology image classification. Here are the image classes a d teir definitions:
-                covid-19: A contagious disease caused by a virus. Ground-glass opacities, consolidation, thickening, pleural effusions commonly appear in infection.
-                pneumonia: An inflammatory condition of the lung primarily small air sacs known as alveoli. Pneumonia may present with opacities.
-                healthy: The absence of diseases and infirmity, indicating the structure is normal.
-                Classify the next given image.
-                [/INST] Understood.</s>[INST] """, idx[0], " Question: Is the chest x-ray image healthy, pneumonia or covid-19? Answer: [/INST]"
+                idx[0], 
+                """Question: What illness does the patient have? 
+                A. normal
+                B. pneumonia
+                C. covid-19 
+                Answer: """
             ] 
             #prompts = [idx[0], "Question: Is the chest x-ray image normal, non-COVID illness, or COVID-19? Answer: "] 
             model_ans = model.classification_for_eval(prompts, covid_classes, add_special_tokens=False) # top_p=0.9, temperature=0.5
+            model_ans = model_ans.translate(str.maketrans('', '', string.punctuation)) # remove punctuation
 
-            print(f"Model Prediction: {model_ans}, Ground Truth: {ans}")
+            # print(f"Model Prediction: {model_ans}, Ground Truth: {ans}")
 
             if model_ans.lower() == ans.lower():
                 right_answers += 1
