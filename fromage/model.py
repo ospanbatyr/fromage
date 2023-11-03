@@ -10,7 +10,7 @@ from transformers import OPTForCausalLM, AutoTokenizer, AutoModelForCausalLM
 from torchvision.models.feature_extraction import get_graph_node_names
 from torchvision.models.feature_extraction import create_feature_extractor
 from .data import cxr_image_transform, coco_image_transform
-from .utils import load_image
+from .utils import load_image, save_model_path
 
 BIN_DIR = osp.abspath(osp.join(__file__, "..", "..", "bin"))
 
@@ -72,27 +72,29 @@ def get_vm_embed_dim(vm_name):
 
 
 class FromageModel(nn.Module):
-    def __init__(self, tokenizer, ret_token_idx, config):
+    def __init__(self, tokenizer, ret_token_idx, inference, config, general_config):
         super().__init__()
         self.modes = ('caption', 'retrieval')
         self.config = config
+        self.general_config = general_config
+        self.inference = inference
         self.tokenizer = tokenizer
         self.ret_token_idx = ret_token_idx
+        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
         self._init_language_model()
         self._init_image_encoder()
         self._init_mappers()
-        self.logit_scale = nn.Parameter(torch.ones([]) * np.log(1 / 0.07))
+        self._load_model()
 
 
     def _init_language_model(self) -> None:
         # create language model
-        model_checkpoint = self.config['language_model']
+        lm_config = self.config['language_model']
 
-        if "7B" in model_checkpoint:
-            self.lm = AutoModelForCausalLM.from_pretrained(model_checkpoint, torch_dtype=torch.float16)
+        if self.inference:
+            self.lm = AutoModelForCausalLM.from_pretrained(lm_config['name'], **lm_config["inference"])
         else:
-            self.lm = AutoModelForCausalLM.from_pretrained(model_checkpoint)
-
+            self.lm = AutoModelForCausalLM.from_pretrained(lm_config['name'], torch_dtype=torch.float16)
 
         # freeze the language model
         for name, param in self.lm.named_parameters():
@@ -137,6 +139,14 @@ class FromageModel(nn.Module):
             self.ret_t2i_mapping = nn.Linear(self.lm_embed_dim, self.shared_emb_dim)
 
     
+    def _load_model(self):
+        if not self.inference:
+            return
+
+        weight_path = save_model_path(self.general_config)
+        print(str(self.load_state_dict(torch.load(weight_path, map_location=self.logit_scale.device), strict=False)))
+
+
     def encode_images(self, pixel_values, mode):
         assert mode in self.modes, f'Mode must be in {str(self.modes)}, got {mode} instead'
         pixel_values = pixel_values.to(self.logit_scale.device)
@@ -316,14 +326,15 @@ class FromageModel(nn.Module):
 
 
 class Fromage(nn.Module):
-    def __init__(self, device, config=dict()):
+    def __init__(self, device, inference, config=dict()):
         super().__init__()
         self.config = config
         self.device = device
+        self.inference = inference
         self._init_tokenizer()
         self._init_inference_img_transform()
-        self.model = FromageModel(tokenizer=self.tokenizer, ret_token_idx=self.ret_token_idx, config=self.model_config)
-    
+        self.model = FromageModel(tokenizer=self.tokenizer, ret_token_idx=self.ret_token_idx, inference=inference, config=self.model_config, general_config=self.config)
+
 
     @property
     def dataset_config(self):
@@ -346,7 +357,7 @@ class Fromage(nn.Module):
 
     def _init_tokenizer(self) -> None:
         # create tokenizer
-        model_checkpoint = self.model_config['language_model']
+        model_checkpoint = self.model_config['language_model']['name']
 
         if "opt-125m" in model_checkpoint:
             tokenizer = AutoTokenizer.from_pretrained("facebook/opt-125m", use_fast=False, device=self.device)

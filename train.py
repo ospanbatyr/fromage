@@ -11,7 +11,6 @@ from fromage.data import MIMICDataModule, CaptionDataModule
 from fromage.experiment import Experiment
 from fromage.utils import create_callbacks, create_logger, save_config
 
-
 CONFIG_DIR = osp.abspath(osp.join(__file__, "..", "config"))
 
 @hydra.main(version_base=None, config_path=CONFIG_DIR, config_name="train")
@@ -34,7 +33,7 @@ def main(config):
 
     logger_conf = config["logger"]
     if logger is not None and logger_conf["version"] != "debug":
-        callbacks, ckpt_path = create_callbacks(config, logger_conf["save_dir"])
+        callbacks = create_callbacks(config, logger_conf["save_dir"])
         save_config(config, logger_conf["save_dir"])
 
     experiment = Experiment(config)

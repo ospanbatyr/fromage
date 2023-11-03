@@ -1,6 +1,9 @@
 model:
   vision_model: "biovil"
-  language_model: "facebook/opt-125m"
+  language_model: 
+    name: "facebook/opt-125m"
+    inference:
+      load_in_8bit: True
   tie_mappers: false
   image_dropout: 0.1
   shared_emb_dim: 512

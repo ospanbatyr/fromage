@@ -1,9 +1,9 @@
 model:
-  vision_model: "resnet-50-imagenet"
+  vision_model: "biovil"
   language_model: 
     name: "emrecanacikgoz/opt-125m-MedMCQA-radiology"
     inference:
-      load_in_8bit: True
+      load_in_8bit: true
   tie_mappers: false
   image_dropout: 0.1
   shared_emb_dim: 512
@@ -14,19 +14,19 @@ trainer:
   accelerator: "gpu"
   devices: 1
   precision: "16-mixed"
-  max_epochs: 10
+  max_steps: 100
 
 # data loader
 loader:
-  batch_size: 72
+  batch_size: 16
   pin_memory: true
   num_workers: 4
 
 # logger (tensorboard)
 logger:
-  name: "vl_eval_2"
+  name: "debug_2"
   project: "fromage"
-  version: "vl_eval_2"
+  version: "debug_2"
   save_dir: "logs/"
 
 dataset:
@@ -34,14 +34,15 @@ dataset:
   resize: 512
   center_crop_size: 480
   tsv_path: "data/MIMIC_JPG_<SPLIT>.tsv"
-  img_path: "/kuacc/users/oince22/hpc_run/physionet.org/files/mimic-cxr-jpg/2.0.0/files/"
+  img_path: "/datasets/mimic/cxr-jpg/physionet.org/files/mimic-cxr-jpg/2.0.0/files/"
 
 optimizer:
   algorithm: 'AdamW'
   gradient_clip_val: 1.0
+  grad_acc_step: 1
   params:
-    lr: 1.0e-4
-    weight_decay: 1.0e-3
+    lr: 1.0e-2
+    weight_decay: 0
 
 # checkpoint
 checkpoint:

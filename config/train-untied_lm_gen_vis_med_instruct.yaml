@@ -1,6 +1,9 @@
 model:
   vision_model: "biovil"
-  language_model: "mistralai/Mistral-7B-Instruct-v0.1"
+  language_model: 
+    name: "mistralai/Mistral-7B-Instruct-v0.1"
+    inference:
+      load_in_8bit: True
   tie_mappers: false
   image_dropout: 0.1
   shared_emb_dim: 512
@@ -60,3 +63,7 @@ hydra:
 defaults:
   - _self_
   - override hydra/job_logging: disabled
+
+inference:
+  lm:
+    load_in_8bit: True

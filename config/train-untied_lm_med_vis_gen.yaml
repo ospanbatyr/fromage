@@ -1,6 +1,9 @@
 model:
   vision_model: "resnet-50-imagenet"
-  language_model: "emrecanacikgoz/opt-125m-MedMCQA-radiology"
+  language_model: 
+    name: "emrecanacikgoz/opt-125m-MedMCQA-radiology"
+    inference:
+      load_in_8bit: True
   tie_mappers: false
   image_dropout: 0.1
   shared_emb_dim: 512

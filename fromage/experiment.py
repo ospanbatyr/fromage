@@ -7,12 +7,13 @@ from .utils import mode_accuracy, retrieval_loss, get_logits
 
 
 class Experiment(pl.LightningModule):
-    def __init__(self, config=dict()):
+    def __init__(self, config=dict(), inference=False):
         super().__init__()
         self.automatic_optimization = False
 
         self.config = config
-        self.model = Fromage(self.device, config)
+        self.inference = inference
+        self.model = Fromage(self.device, inference, config)
         self.modes = ('caption', 'retrieval')
         self.save_hyperparameters(config)
     
@@ -127,8 +128,13 @@ class Experiment(pl.LightningModule):
         print("Total params:", sum(p.numel() for p in self.model.parameters()))
 
         # Model is loaded in fp16, all trainable params should be fp16
-        self.model.model.lm.lm_head.weight.data = self.model.model.lm.lm_head.weight.data.to(dtype=torch.float32)
-        self.model.model.lm.model.embed_tokens.weight.data = self.model.model.lm.model.embed_tokens.weight.data.to(dtype=torch.float32)
+        if self.model.model.lm.lm_head:
+            self.model.model.lm.lm_head.weight.data = self.model.model.lm.lm_head.weight.data.to(dtype=torch.float32)
+
+        if self.model.model.lm.model.decoder.embed_tokens:
+            self.model.model.lm.model.decoder.embed_tokens.weight.data = self.model.model.lm.model.decoder.embed_tokens.weight.data.to(dtype=torch.float32)
+        elif self.model.model.lm.model.embed_tokens:
+            self.model.model.lm.model.embed_tokens.weight.data = self.model.model.lm.model.embed_tokens.weight.data.to(dtype=torch.float32)
 
         parameters = filter(lambda p: p.requires_grad, self.model.parameters())
 

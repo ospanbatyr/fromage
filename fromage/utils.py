@@ -14,6 +14,7 @@ import os.path as osp
 from PIL import Image, ImageFile, UnidentifiedImageError
 from shutil import copy
 from omegaconf import OmegaConf
+from collections import OrderedDict
 
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
@@ -26,6 +27,20 @@ class RETTokenCallback(pl.Callback):
         for param in pl_module.model.model.input_embeddings.parameters():
             mask = torch.arange(param.grad.shape[0]) != ret_token_idx
             param.grad[mask,:] = 0.0
+
+
+def save_model_path(config):
+    return osp.join(config['logger']['save_dir'], 'checkpoints', config['logger']['name'], "last.ckpt")
+
+class SaveModelCallback(pl.Callback):
+    def on_validation_epoch_end(self, trainer: "pl.Trainer", pl_module: "pl.LightningModule") -> None:
+        config = pl_module.config
+        param_dict = OrderedDict()
+        for name, param in pl_module.model.model.state_dict().items():
+            if not (name.startswith("lm") or name.startswith("vm")):
+                param_dict[name] = param
+
+        torch.save(param_dict, save_model_path(config))
 
 
 def save_config(config, log_dir):
@@ -43,21 +58,7 @@ def create_callbacks(config, log_dir):
     checkpoints_path = osp.join(log_dir, 'checkpoints', config['logger']['name'])
     os.makedirs(checkpoints_path, exist_ok=True)
 
-    config['checkpoint']['dirpath'] = checkpoints_path
-    checkpoint_callback = pl.callbacks.ModelCheckpoint(**config['checkpoint'])
-    
-    last_ckpt = osp.join(checkpoints_path, 'last.ckpt')
-    last_ckpt = last_ckpt if osp.isfile(last_ckpt) else None
-    ckpt_path = config['ckpt_path']['ckpt_path']
-
-    if last_ckpt is not None and ckpt_path is not None:
-        raise Exception('resume checkpoint passed (last.ckpt exists already)')
-
-    ckpt_path = last_ckpt if ckpt_path is None else ckpt_path
-    if ckpt_path is not None and not osp.isfile(ckpt_path):
-        raise Exception('ckpt does not exist at {}'.format(ckpt_path))
- 
-    return [RETTokenCallback(), checkpoint_callback], ckpt_path
+    return [RETTokenCallback(), SaveModelCallback()]
 
 
 def create_logger(config):
