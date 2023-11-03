@@ -123,22 +123,25 @@ def mode_accuracy(mode: str, **kwargs) -> dict:
     log_dict = {}
     if mode == "caption":
         output, full_labels = kwargs['output'], kwargs['full_labels']
-        padding, topk = -100, (1, 5)
+        padding, topk = -100, (1, 5, 10)
 
-        acc1, acc5 = accuracy(output[:, :-1, :], full_labels[:, 1:], padding=padding, topk=topk)
+        acc1, acc5, acc10 = accuracy(output[:, :-1, :], full_labels[:, 1:], padding=padding, topk=topk)
         log_dict["caption/acc1"] = acc1
         log_dict["caption/acc5"] = acc5
+        log_dict["caption/acc10"] = acc10
 
     elif mode == "retrieval":
         logits_per_image = kwargs['logits_per_image']
         logits_per_text = kwargs['logits_per_text']
 
-        caption_acc1, caption_acc5 = contrastive_acc(logits_per_text, topk=(1, 5))
-        image_acc1, image_acc5 = contrastive_acc(logits_per_image, topk=(1, 5))
+        caption_acc1, caption_acc5, caption_acc10 = contrastive_acc(logits_per_text, topk=(1, 5, 10))
+        image_acc1, image_acc5, image_acc10 = contrastive_acc(logits_per_image, topk=(1, 5, 10))
         log_dict["retrieval/caption_acc1"] = caption_acc1
         log_dict["retrieval/caption_acc5"] = caption_acc5
+        log_dict["retrieval/caption_acc10"] = caption_acc10
         log_dict["retrieval/image_acc1"] = image_acc1
         log_dict["retrieval/image_acc5"] = image_acc5
+        log_dict["retrieval/image_acc10"] = image_acc10
 
     return log_dict
 
