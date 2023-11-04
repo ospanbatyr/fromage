@@ -72,30 +72,65 @@ class MIMICDataset(Dataset):
     def __init__(self, dataset_path: str, img_path: str, transform: torchvision.transforms):
         self.dataset_path = dataset_path
         self.img_path = img_path
-        self.img_paths, self.reports = self._read_tsv_file()
+        self.data = self._read_tsv_file()
         self.transform = transform
 
+    def _preprocess_img_view(self, txt):
+        paths, positions = [], []
+        study_views = txt.split("[VIEW_DELIM]")
+        for view in study_views:
+            path, pos = view.split("[LOC_DELIM]")
+            paths.append(Path(osp.join(self.img_path, path)))
+            positions.append(pos)
+        
+        return paths, positions
+
+    def _preprocess_img_text(self, txt):
+        if "[NEXT_IMG]" in txt:
+            cur_study_txt, next_study_txt = txt.split("[NEXT_IMG]")
+            next_paths, next_pos = self._preprocess_img_view(next_study_txt)
+        else:
+            cur_study_txt = txt
+            next_paths, next_pos = None, None
+
+        cur_paths, cur_pos = self._preprocess_img_view(cur_study_txt) # shuffle or not, thats the question
+        return cur_paths, cur_pos, next_paths, next_pos
+
     def _read_tsv_file(self):
-        reports = []
-        img_paths = []
+        data = []
         with open(self.dataset_path, "r") as f:
             reader = csv.reader(f, delimiter='\t')
             for report, img_path in reader:
-                reports.append(report)
-                img_paths.append(Path(osp.join(self.img_path, img_path)))
+                cur_report, next_report = report.split("[NEXT_TXT]")
+                cur_paths, cur_pos, next_paths, next_pos = self._preprocess_img_text(report)
+                data.append({
+                    "cur_report": cur_report,
+                    "next_report": next_report,
+                    "cur_paths": cur_paths,
+                    "cur_pos": cur_pos,
+                    "next_paths": next_paths,
+                    "next_pos": next_pos
+                })
                 
-        return img_paths, reports
+        return data
         
     def __len__(self):
-        return len(self.img_paths)
+        return len(self.data)
 
     def __getitem__(self, idx):
         while True:
             try:
-                img = load_image(self.img_paths[idx])
-                text = self.reports[idx]
-                transform_img = self.transform(img)
-                return transform_img, text
+                item = self.data[idx]
+                output = {
+                    "cur_report": item["cur_report"],
+                    "next_report": item["next_report"],
+                    "cur_imgs": [self.transform(load_image(cur_path)) for cur_path in item["cur_paths"]],
+                    "cur_pos": cur_pos,
+                    "next_imgs": [self.transform(load_image(next_path)) for next_path in item["next_paths"]],
+                    "next_pos": next_pos
+                }
+
+                return output
             except Exception as e:
                 print(str(e))
                 idx = np.random.randint(0, len(self.img_paths))

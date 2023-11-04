@@ -11,3 +11,4 @@ fromage/__pycache__/
 fromage.egg-info/
 eval/eval_logs/
 eval/__pycache__/
+notebooks/*.tsv
