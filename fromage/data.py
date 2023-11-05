@@ -1,7 +1,7 @@
 import torch
 import torchvision
 import transformers
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, Sampler
 from torch.utils.data.dataloader import DataLoader
 from torchvision.transforms import Compose, Resize, ToTensor, CenterCrop, RandomHorizontalFlip, RandomAffine, Normalize, RandomCrop
 from pytorch_lightning import LightningDataModule
@@ -17,6 +17,8 @@ from pathlib import Path
 import csv
 import json
 from .utils import ExpandChannels, load_image
+from random import choices
+from copy import deepcopy
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
@@ -72,7 +74,7 @@ class MIMICDataset(Dataset):
     def __init__(self, dataset_path: str, img_path: str, transform: torchvision.transforms):
         self.dataset_path = dataset_path
         self.img_path = img_path
-        self.data = self._read_tsv_file()
+        self.data, self.length = self._read_tsv_file()
         self.transform = transform
 
     def _preprocess_img_view(self, txt):
@@ -97,43 +99,54 @@ class MIMICDataset(Dataset):
         return cur_paths, cur_pos, next_paths, next_pos
 
     def _read_tsv_file(self):
-        data = []
+        data = {}
         with open(self.dataset_path, "r") as f:
             reader = csv.reader(f, delimiter='\t')
-            for report, img_path in reader:
-                cur_report, next_report = report.split("[NEXT_TXT]")
-                cur_paths, cur_pos, next_paths, next_pos = self._preprocess_img_text(report)
-                data.append({
+            for report, img_path, cur_img_count, next_img_count in reader:
+                if "[NEXT_TXT]" in report:
+                    cur_report, next_report = report.split("[NEXT_TXT]")
+                else:
+                    cur_report, next_report = report, None
+                
+                cur_paths, cur_pos, next_paths, next_pos = self._preprocess_img_text(img_path)
+                cur_item = {
                     "cur_report": cur_report,
                     "next_report": next_report,
                     "cur_paths": cur_paths,
                     "cur_pos": cur_pos,
                     "next_paths": next_paths,
                     "next_pos": next_pos
-                })
-                
-        return data
-        
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, idx):
-        while True:
-            try:
-                item = self.data[idx]
-                output = {
-                    "cur_report": item["cur_report"],
-                    "next_report": item["next_report"],
-                    "cur_imgs": [self.transform(load_image(cur_path)) for cur_path in item["cur_paths"]],
-                    "cur_pos": cur_pos,
-                    "next_imgs": [self.transform(load_image(next_path)) for next_path in item["next_paths"]],
-                    "next_pos": next_pos
                 }
 
-                return output
-            except Exception as e:
-                print(str(e))
-                idx = np.random.randint(0, len(self.img_paths))
+                if f"{cur_img_count}|{next_img_count}" not in data:
+                    data[f"{cur_img_count}|{next_img_count}"] = [cur_item]
+                else:
+                    data[f"{cur_img_count}|{next_img_count}"].append(cur_item)
+        
+        length = 0
+        for img_views, items in data.items():
+            length += len(items)
+
+        return data, length
+        
+    def __len__(self):
+        return self.length
+
+    def lens(self):
+        return {img_views: len(items) for img_views, items in self.data.items()}
+
+    def __getitem__(self, item):
+        idx, cur_img, next_img = item["idx"], item["cur_img"], item["next_img"]
+        img_view = f"{cur_img}|{next_img}"
+        item = self.data[img_view][idx]
+        cur_report = item["cur_report"]
+        next_report = item["next_report"]
+        cur_imgs = torch.stack([self.transform(load_image(cur_path)) for cur_path in item["cur_paths"]])
+        if item["next_paths"] is not None:
+            next_imgs = torch.stack([self.transform(load_image(next_path)) for next_path in item["next_paths"]])
+        else:
+            next_imgs = None
+        return cur_report, next_report, cur_imgs, next_imgs
 
 
 class COCODataset(Dataset):
@@ -247,6 +260,71 @@ class CaptionDataModule(BaseDataModule):
         return self.val_dataloader()
 
 
+class GroupSampler(Sampler):
+    def __init__(self, data, lens, batch_size, shuffle=True):
+        self.data = data
+        self.lens = lens
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.img_views, self.probs, self.batch_counts = self._sample_prob()
+        self.batches = self._create_batches()
+
+    def _sample_prob(self):
+        img_views = []
+        probs = []
+        batch_counts = 0
+
+        length = sum(view_len for view_len in self.lens.values())
+        for img_view, view_len in self.lens.items():
+            img_views.append(img_view)
+            probs.append(view_len / length)
+            batch_counts += view_len // self.batch_size
+
+        return img_views, probs, batch_counts
+
+    def _create_batches(self):
+        indices = []
+        states = [0 for _ in range(len(self.img_views))]
+        batches = [] # tuple, split and batch
+        probs = [fp for fp in self.probs] 
+
+        for img_view in self.img_views:
+            if self.shuffle:
+                indices.append(torch.randperm(len(self.data[img_view])))
+            else:
+                indices.append(torch.arange(len(self.data[img_view])))
+
+        splits = list(range(len(self.img_views)))
+
+        while True:
+            if not splits:
+                break
+            
+            cur_img_view = choices(splits, weights=probs)[0]
+            if (states[cur_img_view] + self.batch_size) > self.lens[self.img_views[cur_img_view]]:
+                idx = splits.index(cur_img_view)
+                del splits[idx]
+                del probs[idx]
+                continue
+
+            cur_indices = indices[cur_img_view][states[cur_img_view]:states[cur_img_view] + self.batch_size]
+            cur_imgs = [int(self.img_views[cur_img_view].split("|")[0]) for _ in range(self.batch_size)]
+            next_imgs = [int(self.img_views[cur_img_view].split("|")[1]) for _ in range(self.batch_size)]
+            batch = [{"idx": idx, "cur_img": cur_img, "next_img": next_img} for idx, cur_img, next_img in zip(cur_indices, cur_imgs, next_imgs)]
+
+            batches.append(batch)
+            states[cur_img_view] += self.batch_size
+
+        return batches
+            
+    def __iter__(self):
+        for i in range(0, self.batch_counts):
+            yield self.batches[i]
+
+    def __len__(self):
+        return len(self.batch_counts)
+
+
 class MIMICDataModule(BaseDataModule):
     def __init__(self, config=dict()):
         super(MIMICDataModule, self).__init__(config)
@@ -282,10 +360,14 @@ class MIMICDataModule(BaseDataModule):
         )
 
     def train_dataloader(self):
+        batch_sampler = GroupSampler(self.train_data.data, self.train_data.lens(), self.loader_config["batch_size"], shuffle=True)
+        config = self.loader_config
+        del config["batch_size"]
+
         return DataLoader(
             self.train_data,
-            shuffle=True,
-            **self.loader_config
+            batch_sampler=batch_sampler,
+            **config
         )
 
     def val_dataloader(self):

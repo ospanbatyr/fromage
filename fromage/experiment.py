@@ -28,7 +28,7 @@ class Experiment(pl.LightningModule):
 
 
     def training_step(self, batch, batch_idx):
-        pixels, text = batch
+        cur_text, next_text, cur_pixels, next_pixels = batch
         opt = self.optimizers()
         opt.zero_grad()
 
@@ -38,7 +38,7 @@ class Experiment(pl.LightningModule):
         losses = {f"{mode}_loss/train":0 for mode in self.modes}
         for mode in self.modes:
             opt.zero_grad()
-            output, t2i_embs, i2t_embs, full_labels, last_logits = self.forward(pixels, text, mode=mode)
+            output, t2i_embs, i2t_embs, full_labels, last_logits = self.forward(cur_text, next_text, cur_pixels, next_pixels, mode=mode)
             loss = output.loss / grad_acc_step
 
             if mode == "retrieval":
