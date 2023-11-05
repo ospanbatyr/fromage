@@ -93,7 +93,7 @@ class MIMICDataset(Dataset):
             next_paths, next_pos = self._preprocess_img_view(next_study_txt)
         else:
             cur_study_txt = txt
-            next_paths, next_pos = None, None
+            next_paths, next_pos = "", ""
 
         cur_paths, cur_pos = self._preprocess_img_view(cur_study_txt) # shuffle or not, thats the question
         return cur_paths, cur_pos, next_paths, next_pos
@@ -106,7 +106,7 @@ class MIMICDataset(Dataset):
                 if "[NEXT_TXT]" in report:
                     cur_report, next_report = report.split("[NEXT_TXT]")
                 else:
-                    cur_report, next_report = report, None
+                    cur_report, next_report = report, ""
                 
                 cur_paths, cur_pos, next_paths, next_pos = self._preprocess_img_text(img_path)
                 cur_item = {
@@ -142,11 +142,11 @@ class MIMICDataset(Dataset):
         cur_report = item["cur_report"]
         next_report = item["next_report"]
         cur_imgs = torch.stack([self.transform(load_image(cur_path)) for cur_path in item["cur_paths"]])
-        if item["next_paths"] is not None:
+        if item["next_paths"]:
             next_imgs = torch.stack([self.transform(load_image(next_path)) for next_path in item["next_paths"]])
         else:
-            next_imgs = None
-        return cur_report, next_report, cur_imgs, next_imgs
+            next_imgs = torch.empty((0, ))
+        return cur_imgs, next_imgs, cur_report, next_report
 
 
 class COCODataset(Dataset):

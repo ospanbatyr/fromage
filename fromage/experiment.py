@@ -14,7 +14,7 @@ class Experiment(pl.LightningModule):
         self.config = config
         self.inference = inference
         self.model = Fromage(self.device, inference, config)
-        self.modes = ('caption', 'retrieval')
+        self.modes = ('caption', ) # , 'retrieval' disabled for debugging purposes
         self.save_hyperparameters(config)
     
 
@@ -23,8 +23,8 @@ class Experiment(pl.LightningModule):
         return self.model.config
 
 
-    def forward(self, pixels, text, mode):
-        return self.model(pixels, text, mode=mode)
+    def forward(self, cur_text, next_text, cur_pixels, next_pixels, mode):
+        return self.model(cur_text, next_text, cur_pixels, next_pixels, mode=mode)
 
 
     def training_step(self, batch, batch_idx):

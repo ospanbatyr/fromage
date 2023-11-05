@@ -148,6 +148,15 @@ class FromageModel(nn.Module):
 
 
     def encode_images(self, pixel_values, mode):
+        print(f"pixel_values.shape: {pixel_values.shape}")
+        if len(pixel_values.shape) == 5: # means we have multiple images
+            bsz, img_cnt, ch, h, w = pixel_values.shape
+            pixel_values = pixel_values.view(bsz * img_cnt, ch, h, w)
+        else:
+            bsz, ch, h, w = pixel_values.shape
+            img_cnt = 1
+
+        print(f"pixel_values.shape: {pixel_values.shape}")
         assert mode in self.modes, f'Mode must be in {str(self.modes)}, got {mode} instead'
         pixel_values = pixel_values.to(self.logit_scale.device)
 
@@ -161,46 +170,76 @@ class FromageModel(nn.Module):
             img_embs = self.ret_i2t_mapping(img_embs)
             img_embs = self.image_dropout(img_embs)
 
+        bsz_n_img_cnt, emb_dim = img_embs.shape
+        img_embs = img_embs.view(bsz, img_cnt, emb_dim)
+
         return img_embs
 
     
-    def forward(self, pixel_values, text_inputs, mode):
+    def forward(self, cur_pixel_values, next_pixel_values, cur_text_inputs, next_text_inputs, mode):
         assert mode in self.modes, f'Mode must be in {str(self.modes)}, got {mode} instead'
 
         # if we are going to perform retrieval, we need to add
         # the [RET] token at the end of all text inputs
         if mode == "retrieval":
-            new_text_inputs = []
-            for i in range(len(text_inputs)):
-                new_text_inputs.append(f'{text_inputs[i]}[RET]')
-            text_inputs = tuple(new_text_inputs)
+            def add_ret_token(text_inputs):
+                new_text_inputs = []
+                for i in range(len(text_inputs)):
+                    new_text_inputs.append(f'{text_inputs[i]}[RET]')
+                return tuple(new_text_inputs)
+
+            cur_text_inputs = add_ret_token(cur_text_inputs)
+            next_text_inputs = add_ret_token(next_text_inputs) if next_text_inputs else None
+
 
         max_length = self.config['max_length']
-        text_inputs = self.tokenizer(
-            text_inputs, return_tensors="pt", 
-            padding="max_length", truncation=True, 
-            max_length=max_length
-        ).to(self.logit_scale.device)
+        def tokenize_text(text_inputs):
+            return self.tokenizer(
+                text_inputs, return_tensors="pt", 
+                padding="max_length", truncation=True, 
+                max_length=max_length
+            ).to(self.logit_scale.device)
 
-        text_lens = text_inputs.attention_mask.sum(dim=1)
+        cur_text_inputs = tokenize_text(cur_text_inputs)
+        next_text_inputs = tokenize_text(next_text_inputs) if next_text_inputs is not None else None
 
+        cur_text_lens = cur_text_inputs.attention_mask.sum(dim=1)
+        next_text_lens = next_text_inputs.attention_mask.sum(dim=1) if next_text_inputs is not None else None
         # sometimes text length may be longer than max length, thus [RET] might not be present.
         # thus, we assert that last token id is [RET]
         if mode == "retrieval":
-            for idx in range(len(text_inputs.input_ids)):
-                if text_inputs.input_ids[idx][text_lens[idx]-1] != self.ret_token_idx:
-                    text_inputs.input_ids[idx][text_lens[idx]-1] = self.ret_token_idx
+            def ensure_ret_token(text_inputs):
+                for idx in range(len(text_inputs.input_ids)):
+                    if text_inputs.input_ids[idx][text_lens[idx]-1] != self.ret_token_idx:
+                        text_inputs.input_ids[idx][text_lens[idx]-1] = self.ret_token_idx
+                return text_inputs
+
+            cur_text_inputs = ensure_ret_token(cur_text_inputs)
+            next_text_inputs = ensure_ret_token(next_text_inputs) if next_text_inputs is not None else None
+
 
         t2i_embs, i2t_embs, last_logits = None, None, None
 
         if mode == "caption":
-            img_embs = self.encode_images(pixel_values, mode=mode)
-            img_embs = img_embs.reshape(img_embs.shape[0], self.num_img_tokens, -1)
+            cur_img_embs = self.encode_images(cur_pixel_values, mode=mode)
+            #cur_img_embs = cur_img_embs.reshape(cur_img_embs.shape[0], self.num_img_tokens, -1) # this part probably needs a rework
 
-            labels = text_inputs.input_ids
-            text_embs = self.input_embeddings(labels)
-            additional_mask = torch.ones(img_embs.shape[:2], dtype=torch.int64).to(self.logit_scale.device)
-            attention_mask = torch.cat([additional_mask, text_inputs.attention_mask], dim=1)
+            if next_pixel_values.nelement() != 0:
+                next_img_embs = self.encode_images(next_pixel_values, mode=mode)
+                #next_img_embs = next_img_embs.reshape(next_img_embs.shape[0], self.num_img_tokens, -1) # this part probably needs a rework
+            else:
+                next_img_embs = None
+
+            def prepare_text_args(text_inputs, img_embs):
+                labels = text_inputs.input_ids
+                text_embs = self.input_embeddings(labels)
+                additional_mask = torch.ones(img_embs.shape[:2], dtype=torch.int64).to(self.logit_scale.device)
+                attention_mask = torch.cat([additional_mask, text_inputs.attention_mask], dim=1)
+                full_labels = torch.full(img_embs.shape[:2], -100).to(self.logit_scale.device)
+                full_labels = torch.cat([full_labels, labels], dim=1)
+                return text_embs, attention_mask, full_labels
+
+            cur_text_embs, cur_attention_mask, cur_full_labels = prepare_text_args(cur_text_inputs, cur_img_embs)   
 
             '''
             Q: Why do we use is `-100` for labels of image embeddings?**
@@ -209,10 +248,17 @@ class FromageModel(nn.Module):
             Source: [https://huggingface.co/transformers/v4.4.2/custom_datasets.html](https://huggingface.co/transformers/v4.4.2/custom_datasets.html)
             '''
 
-            full_labels = torch.full(img_embs.shape[:2], -100).to(self.logit_scale.device)
-            full_labels = torch.cat([full_labels, labels], dim=1)
+            if next_text_inputs is not None and next_img_embs is not None:
+                next_text_embs, next_attention_mask, next_full_labels = prepare_text_args(next_text_inputs, next_img_embs)
+                input_embs = [cur_img_embs, cur_text_embs, next_img_embs, next_text_embs]
+                attention_mask = torch.cat([cur_attention_mask, next_attention_mask], dim=1)
+                full_labels = torch.cat([cur_full_labels, next_full_labels], dim=1)
+            else:
+                input_embs = [cur_img_embs, cur_text_embs]
+                attention_mask = cur_attention_mask
+                full_labels = cur_full_labels
 
-            input_embs = torch.cat([img_embs, text_embs], dim=1)
+            input_embs = torch.cat(input_embs, dim=1)
             output = self.lm(inputs_embeds=input_embs, attention_mask=attention_mask, labels=full_labels, output_hidden_states=True)
         
         elif mode == "retrieval":
@@ -253,12 +299,10 @@ class FromageModel(nn.Module):
                 cur_tok_prob = probs[:, tok_id]
 
                 ppl += torch.log(cur_tok_prob)
-                #print(f"cur_tok_prob: {cur_tok_prob}, ppl: {ppl}")        
                 next_embedding = self.input_embeddings(tok_id).unsqueeze(0)
                 embeddings = torch.cat([embeddings, next_embedding], dim=1)
 
-        #print(f"len(expected_tok_ids): {len(expected_tok_ids)}")
-        ppl = torch.exp(-ppl) # 1 / len(expected_tok_ids) *
+        ppl = torch.exp(-ppl)
         return ppl.item()
 
 
@@ -379,11 +423,11 @@ class Fromage(nn.Module):
         self.image_token = self.tokenizer.cls_token_id
 
 
-    def __call__(self, images, tgt_tokens=None, generate=False, max_len=96, temperature=0.0, top_p=1.0, mode="caption", inference=False):
+    def __call__(self, cur_images, next_images=None, cur_tgt_tokens=None, next_tgt_tokens=None, generate=False, max_len=96, temperature=0.0, top_p=1.0, mode="caption", inference=False):
         if generate:
-            return self.model.generate(embeddings=images, max_len=max_len, temperature=temperature, top_p=top_p)
+            return self.model.generate(embeddings=cur_images, max_len=max_len, temperature=temperature, top_p=top_p)
 
-        return self.model(pixel_values=images, text_inputs=tgt_tokens, mode=mode)
+        return self.model(cur_images, next_images, cur_tgt_tokens, next_tgt_tokens, mode=mode)
 
 
     def classification_for_eval(self, prompts: List, classes: List, add_special_tokens=True):
