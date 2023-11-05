@@ -148,7 +148,6 @@ class FromageModel(nn.Module):
 
 
     def encode_images(self, pixel_values, mode):
-        print(f"pixel_values.shape: {pixel_values.shape}")
         if len(pixel_values.shape) == 5: # means we have multiple images
             bsz, img_cnt, ch, h, w = pixel_values.shape
             pixel_values = pixel_values.view(bsz * img_cnt, ch, h, w)
@@ -156,7 +155,6 @@ class FromageModel(nn.Module):
             bsz, ch, h, w = pixel_values.shape
             img_cnt = 1
 
-        print(f"pixel_values.shape: {pixel_values.shape}")
         assert mode in self.modes, f'Mode must be in {str(self.modes)}, got {mode} instead'
         pixel_values = pixel_values.to(self.logit_scale.device)
 
@@ -222,13 +220,7 @@ class FromageModel(nn.Module):
 
         if mode == "caption":
             cur_img_embs = self.encode_images(cur_pixel_values, mode=mode)
-            #cur_img_embs = cur_img_embs.reshape(cur_img_embs.shape[0], self.num_img_tokens, -1) # this part probably needs a rework
-
-            if next_pixel_values.nelement() != 0:
-                next_img_embs = self.encode_images(next_pixel_values, mode=mode)
-                #next_img_embs = next_img_embs.reshape(next_img_embs.shape[0], self.num_img_tokens, -1) # this part probably needs a rework
-            else:
-                next_img_embs = None
+            next_img_embs = self.encode_images(next_pixel_values, mode=mode) if next_pixel_values.nelement() != 0 else None
 
             def prepare_text_args(text_inputs, img_embs):
                 labels = text_inputs.input_ids
@@ -473,8 +465,6 @@ class Fromage(nn.Module):
             if curr_ppl < min_ppl:
                 min_ppl = curr_ppl
                 min_ppl_idx = cls_idx
-
-            #print(f"cur_ppl: {curr_ppl}, min_ppl: {min_ppl}, class: {cls_name}")
 
         return classes[min_ppl_idx]
 

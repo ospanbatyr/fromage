@@ -7,7 +7,7 @@ model:
   tie_mappers: false
   image_dropout: 0.1
   shared_emb_dim: 512
-  max_length: 112
+  max_length: 224 # 112
   num_img_tokens: 1
 
 trainer:
@@ -18,15 +18,15 @@ trainer:
 
 # data loader
 loader:
-  batch_size: 32
+  batch_size: 4
   pin_memory: true
   num_workers: 4
 
 # logger (tensorboard)
 logger:
-  name: "lm_gen_vis_med_mistral_instruct"
+  name: "mist_inst_mul_img_mul_rep_2"
   project: "fromage"
-  version: "lm_gen_vis_med_mistral_instruct"
+  version: "mist_inst_mul_img_mul_rep_2"
   save_dir: "logs/"
 
 dataset:
@@ -39,9 +39,9 @@ dataset:
 optimizer:
   algorithm: 'AdamW'
   gradient_clip_val: 1.0
-  grad_acc_step: 4
+  grad_acc_step: 30 # keep effective batch size the same
   params:
-    lr: 1.0e-4
+    lr: 5.0e-5
     weight_decay: 1.0e-3
 
 # checkpoint

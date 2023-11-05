@@ -206,6 +206,7 @@ class BaseDataModule(LightningDataModule):
     def __init__(self, config=dict()):
         super().__init__()
         self.config = config
+        self.batch_size = self.loader_config['batch_size']
         self._init_img_transform()
         self._init_datasets()
     
@@ -360,9 +361,9 @@ class MIMICDataModule(BaseDataModule):
         )
 
     def train_dataloader(self):
-        batch_sampler = GroupSampler(self.train_data.data, self.train_data.lens(), self.loader_config["batch_size"], shuffle=True)
-        config = self.loader_config
-        del config["batch_size"]
+        batch_sampler = GroupSampler(self.train_data.data, self.train_data.lens(), self.batch_size, shuffle=True)
+        config = deepcopy(self.loader_config)
+        del config['batch_size']
 
         return DataLoader(
             self.train_data,
@@ -371,17 +372,26 @@ class MIMICDataModule(BaseDataModule):
         )
 
     def val_dataloader(self):
+        batch_sampler = GroupSampler(self.train_data.data, self.train_data.lens(), self.batch_size, shuffle=False)
+        config = deepcopy(self.loader_config)
+        del config['batch_size']
+
         return DataLoader(
             self.val_data,
-            shuffle=False,
-            **self.loader_config
+            batch_sampler=batch_sampler,
+            **config
         )
 
+
     def test_dataloader(self):
+        batch_sampler = GroupSampler(self.test_data.data, self.test_data.lens(), self.batch_size, shuffle=False)
+        config = deepcopy(self.loader_config)
+        del config['batch_size']
+
         return DataLoader(
             self.test_data,
-            shuffle=False,
-            **self.loader_config
+            batch_sampler=batch_sampler,
+            **config
         )
 
     def predict_dataloader(self):

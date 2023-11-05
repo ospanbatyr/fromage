@@ -68,11 +68,11 @@ class Experiment(pl.LightningModule):
 
     @torch.no_grad()
     def validation_step(self, batch, batch_idx):
-        pixels, text = batch
+        cur_text, next_text, cur_pixels, next_pixels = batch
 
         losses = {f"{mode}_loss/val":0 for mode in self.modes}
         for mode in self.modes:
-            output, t2i_embs, i2t_embs, full_labels, last_logits = self.forward(pixels, text, mode=mode)
+            output, t2i_embs, i2t_embs, full_labels, last_logits = self.forward(cur_text, next_text, cur_pixels, next_pixels, mode=mode)
             loss = output.loss
 
             if mode == "retrieval":
@@ -95,11 +95,11 @@ class Experiment(pl.LightningModule):
 
     @torch.no_grad()
     def test_step(self, batch, batch_idx):
-        pixels, text = batch
+        cur_text, next_text, cur_pixels, next_pixels = batch
 
         losses = {f"{mode}_loss/test":0 for mode in self.modes}
         for mode in self.modes:
-            output, t2i_embs, i2t_embs, full_labels, last_logits = self.forward(pixels, text, mode=mode)
+            output, t2i_embs, i2t_embs, full_labels, last_logits = self.forward(cur_text, next_text, cur_pixels, next_pixels, mode=mode)
             loss = output.loss
 
             if mode == "retrieval":
@@ -131,9 +131,11 @@ class Experiment(pl.LightningModule):
         if self.model.model.lm.lm_head:
             self.model.model.lm.lm_head.weight.data = self.model.model.lm.lm_head.weight.data.to(dtype=torch.float32)
 
-        if self.model.model.lm.model.decoder.embed_tokens:
-            self.model.model.lm.model.decoder.embed_tokens.weight.data = self.model.model.lm.model.decoder.embed_tokens.weight.data.to(dtype=torch.float32)
-        elif self.model.model.lm.model.embed_tokens:
+        try:
+            # if self.model.model.lm.model.decoder.embed_tokens:
+            self.model.model.lm.model.decoder.embed_tokens.weight.data = self.model.model.lm.model.decoder.embed_tokens.weight.data.to(dtype=torch.float32)            
+        except:
+            # if self.model.model.lm.model.embed_tokens:
             self.model.model.lm.model.embed_tokens.weight.data = self.model.model.lm.model.embed_tokens.weight.data.to(dtype=torch.float32)
 
         parameters = filter(lambda p: p.requires_grad, self.model.parameters())

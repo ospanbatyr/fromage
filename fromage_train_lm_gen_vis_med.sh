@@ -3,11 +3,9 @@
 #SBATCH --job-name=fromage
 #SBATCH --nodes=1        
 #SBATCH --ntasks-per-node=4
-#SBATCH --partition=ai
-#SBATCH --account=ai
-#SBATCH --qos=ai
+#SBATCH --partition=mid
 #SBATCH --gres=gpu:rtx_a6000:1
-#SBATCH --time=3-0:0:0   
+#SBATCH --time=1-0:0:0   
 #SBATCH --output=logs/fromage_lm_gen_vis_med-%j.out
 #SBATCH --mem=48G
 # Load Anaconda
